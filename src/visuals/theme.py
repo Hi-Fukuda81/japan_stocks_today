@@ -72,7 +72,13 @@ def filings_label(data: dict) -> str:
     if is_weekly(data):
         p = data["period"]
         return f"{ja_date(p['start'])}〜{ja_date(p['end'])} 提出分"
-    return f"{ja_date(data['filings']['date'])} 提出分"
+    p = data.get("period") or {}
+    day = ja_date(data["filings"]["date"])
+    if p.get("after"):
+        return f"{day} {int(p['after'][:2])}時以降の提出分"
+    if p.get("before"):
+        return f"{day} {int(p['before'][:2])}時までの提出分"
+    return f"{day} 提出分"
 
 
 def ease_out(p: float) -> float:

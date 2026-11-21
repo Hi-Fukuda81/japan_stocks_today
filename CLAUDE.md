@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 夕方便（大引け後の開示まとめ）と土曜の週間まとめの fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
 - 実データ（2026-11-16〜11-20 の週間まとめ）で fetch → tts → visual → video を動かした（`tmp/real/`）。そのときの台本は手書きで、`claude -p` での台本生成と YouTube への投稿は未実行。夕方便は実データでまだ動かしていない。
 - launchd は未登録（`scripts/install_launchd.sh install` を実行していない）。まず手動で1本を最後まで作ってから登録する。
-- 未実装: 朝便（月〜金の朝）、TDnet・JPX のデータ、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
+- 未実装: 朝便の自動実行、TDnet・JPX のデータ（決算短信など）、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
 
 次のことは勝手に決めず、ユーザーに確認する: YouTube チャンネルと OAuth クライアントの使い方、公開のしかた（予約公開にするか）、VOICEVOX の声の割り当て、新しいデータソースの追加。
 
@@ -26,9 +26,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 便 | 公開時刻（JST） | 内容 | 状態 |
 |---|---|---|---|
-| 朝便（月〜金） | 8:00ごろ（寄り付き前） | 前日15時以降の開示・決算のまとめ、今日の決算発表予定、朝の為替 | 未実装 |
-| 夕方便（月〜金） | 16:00〜17:00（大引け後） | 当日の公開買付・大量保有報告書（保有割合の動き）・臨時報告書、直近のドル円・国債金利 | 実装済み |
+| 朝便（月〜金） | 8:00ごろ（寄り付き前） | 前営業日の15時以降に EDINET へ提出された書類、直近のドル円・国債金利 | fetch 以降は実装済み（`--edition morning`）。自動実行（`src/daily.py`・launchd）は未対応 |
+| 夕方便（月〜金） | 16:00〜17:00（大引け後） | 当日15時より前に EDINET へ提出された公開買付・大量保有報告書（保有割合の動き）・臨時報告書、直近のドル円・国債金利 | 実装済み |
 | 週間まとめ（土） | 土曜の朝（launchd は 9:00） | その週（月〜金）の公開買付・大量保有報告書・臨時報告書、ドル円・国債金利の前週末比 | 実装済み |
+
+朝便と夕方便は `config.yaml` の `data.edinet.cutoff`（15:00）で分け、同じ書類を2回取り上げない（`fetch.period_for`）。週間まとめは時刻で絞らない。
+
+セリフと画面では「朝便」「夕方便」と言わず「朝のまとめ」「夕方のまとめ」と言う（VOICEVOX が誤読する。ユーザーの指示）。「大株主」「日本株」の読みは `tts_replacements` で直している。
+
+最後のシーン（`07_ending`）は終了画面で、`video.end_screen_sec`（20秒）以上になるよう最後のセリフの表示を延ばす。画面にはチャンネル登録とおすすめ動画2本の枠を空けてあり、要素そのものは YouTube Studio で置く（API では設定できない）。
 
 ## コマンド
 
@@ -37,6 +43,7 @@ uv sync                                                        # 依存関係 (P
 uv run python -m src.main --date 2026-11-20                    # 全ステップ (fetch → script → tts → visual → video → upload)
 uv run python -m src.main --step visual --date 2026-11-20      # 1ステップだけ再実行
 uv run python -m src.main --date 2026-11-21 --edition weekly   # 土曜の週間まとめ (直近の月〜金)
+uv run python -m src.main --date 2026-11-20 --edition morning  # 朝便 (前営業日の15時以降の提出分)
 uv run pytest                                                  # 全テスト
 uv run pytest tests/test_validate.py::test_ng_word_detected    # 1テストだけ
 uv run pytest --cov=src --cov=.claude/skills/evening-disclosure-script/scripts

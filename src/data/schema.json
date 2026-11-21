@@ -7,7 +7,7 @@
             "count": {"type": "integer", "minimum": 0}},
   "properties": {
     "date": {"$ref": "#/$defs/day"},
-    "edition": {"enum": ["evening", "weekly"]},
+    "edition": {"enum": ["morning", "evening", "weekly"]},
     "period": {"type": "object", "required": ["kind", "start", "end", "days"]},
     "filings": {
       "type": "object",

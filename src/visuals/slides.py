@@ -6,6 +6,7 @@ from datetime import date as Date
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse, Rectangle
 
 from src.config import load_config
 from src.visuals import theme as t
@@ -43,9 +44,11 @@ def title(data: dict, out: Path) -> None:
     d = Date.fromisoformat(data["date"])
     fig.text(0.5, 0.80, f"{d.year}年{d.month}月{d.day}日", ha="center", fontsize=44, color=t.MUTED)
     weekly = t.is_weekly(data)
-    fig.text(0.5, 0.67, "きょうの日本株 週間まとめ" if weekly else "きょうの日本株 夕方便", ha="center", fontsize=96,
-             fontweight="bold")
-    sub = f"{t.ja_date(data['period']['start'])}〜{t.ja_date(data['period']['end'])}の開示" if weekly else "大引け後の開示まとめ"
+    morning = data.get("edition") == "morning"
+    name = "週間まとめ" if weekly else "朝のまとめ" if morning else "夕方のまとめ"
+    fig.text(0.5, 0.67, f"きょうの日本株 {name}", ha="center", fontsize=96, fontweight="bold")
+    sub = (f"{t.ja_date(data['period']['start'])}〜{t.ja_date(data['period']['end'])}の開示" if weekly
+           else f"{t.filings_label(data)}の開示")
     fig.text(0.5, 0.585, sub, ha="center", fontsize=36, color=t.ACCENT)
     topics = headline_topics(data)
     if topics:
@@ -83,13 +86,19 @@ def events_list(data: dict, out: Path) -> None:
 
 
 def ending(data: dict, out: Path, speaker_name: str, disclaimer: str, credits: list[str]) -> None:
+    """終了画面。YouTube Studio で置く「チャンネル登録」と「おすすめ動画」2本の場所を空けておく。"""
     fig = _blank_figure()
-    fig.text(0.5, 0.78, "ご視聴ありがとうございました", ha="center", fontsize=64, fontweight="bold")
-    fig.text(0.5, 0.64, "データ出典", ha="center", fontsize=26, color=t.MUTED)
-    for i, c in enumerate(credits):
-        fig.text(0.5, 0.59 - i * 0.045, c, ha="center", fontsize=22, color=t.MUTED)
-    fig.text(0.5, 0.59 - len(credits) * 0.045 - 0.02, f"音声: VOICEVOX:{speaker_name}", ha="center", fontsize=22,
-             color=t.MUTED)
+    fig.text(0.5, 0.90, "ご視聴ありがとうございました", ha="center", fontsize=52, fontweight="bold")
+    # 画面は 16:9 なので、図の座標で幅と高さが同じ四角は 16:9 になる
+    fig.patches.append(Ellipse((0.17, 0.61), 0.15, 0.15 * 16 / 9, transform=fig.transFigure, fill=False,
+                               edgecolor=t.MUTED, linewidth=2, linestyle="--"))
+    fig.text(0.17, 0.42, "チャンネル登録", ha="center", fontsize=34, fontweight="bold", color=t.ACCENT)
+    for x in (0.34, 0.66):
+        fig.patches.append(Rectangle((x, 0.47), 0.30, 0.30, transform=fig.transFigure, fill=False,
+                                     edgecolor=t.MUTED, linewidth=2, linestyle="--"))
+    fig.text(0.65, 0.42, "おすすめ動画", ha="center", fontsize=34, fontweight="bold", color=t.ACCENT)
+    line = "データ出典: " + " / ".join(credits) + f"   音声: VOICEVOX:{speaker_name}"
+    fig.text(0.5, 0.31, line, ha="center", fontsize=18, color=t.MUTED)
     # 免責文は読み上げず、字幕帯の上に薄い色で小さく表示する
     fig.text(0.5, t.SUBTITLE_BAND_RATIO + 0.04, disclaimer, ha="center", fontsize=18, color=t.FAINT)
     t.save(fig, out)

@@ -102,9 +102,19 @@ def _listed_holdings(docs: list[dict], codes: dict[str, dict]) -> list[dict]:
     return items
 
 
-def holding_doc_ids(docs: list[dict], codes: dict[str, dict], days: list[str]) -> list[str]:
+def in_period(docs: list[dict], days: list[str], after: str | None = None, before: str | None = None) -> list[dict]:
+    """取下げなどを除き、提出日が days で、提出時刻が after 以降・before より前の書類 (時刻は "15:00" の形)。
+
+    一覧には、その日に取下げや修正の操作があった別の日の書類も混ざるので、提出日でも絞る。
+    """
+    return [d for d in active_documents(docs) if submitted_date(d) in days
+            and (after is None or submitted_time(d) >= after) and (before is None or submitted_time(d) < before)]
+
+
+def holding_doc_ids(docs: list[dict], codes: dict[str, dict], days: list[str], after: str | None = None,
+                    before: str | None = None) -> list[str]:
     """保有割合を読むために本文を取りに行く書類の ID。"""
-    active = [d for d in active_documents(docs) if submitted_date(d) in days]
+    active = in_period(docs, days, after, before)
     return [x["doc_id"] for x in _listed_holdings(active, codes) if x["doc_id"]]
 
 
@@ -177,10 +187,10 @@ def build_tender_offers(docs: list[dict], codes: dict[str, dict]) -> dict:
 
 
 def build_filings(docs: list[dict], codes: dict[str, dict], days: list[str], top_types: int,
-                  max_items: int, holding_details: dict[str, dict] | None = None) -> dict:
-    """days は対象の提出日 (夕方便は1日、週間まとめはその週の営業日)。"""
-    # 一覧には、その日に取下げや修正の操作があった別の日の書類も混ざるので、提出日でも絞る
-    active = [d for d in active_documents(docs) if submitted_date(d) in days]
+                  max_items: int, holding_details: dict[str, dict] | None = None, after: str | None = None,
+                  before: str | None = None) -> dict:
+    """days は対象の提出日 (朝便は前営業日、夕方便は当日、週間まとめはその週の営業日)。after / before は提出時刻の範囲。"""
+    active = in_period(docs, days, after, before)
     per_day = Counter(submitted_date(d) for d in active)
     return {
         "date": days[-1],

@@ -263,7 +263,8 @@ def test_mof_fetch_reads_all_history_only_when_needed(monkeypatch):
 
 @pytest.fixture
 def fake_sources(monkeypatch, tmp_path, example_data):
-    docs = [doc("350", issuerEdinetCode="E1", docDescription="大量保有報告書"), doc("180"), doc("030")]
+    docs = [doc("350", time_="10:00", issuerEdinetCode="E1", docDescription="大量保有報告書"),
+            doc("180", time_="10:00"), doc("030", time_="10:00")]
     monkeypatch.setattr(fetch_mod.DayPaths, "for_date", classmethod(lambda cls, d: DayPaths(tmp_path / d)))
     monkeypatch.setattr(fetch_mod, "env", lambda name: "key")
     monkeypatch.setattr(fetch_mod.edinet, "load_codes", lambda *a, **k: CODES)
@@ -303,7 +304,7 @@ def test_fetch_weekly_covers_the_week(fake_sources, monkeypatch):
     assert data["filings"]["large_holdings"]["top_issuers"] == [{"issuer": "アルファ", "sec_code": "1111", "count": 5}]
     assert data["usdjpy"]["prev_date"] == "2026-11-13" and len(data["notes"]) == 2
     with pytest.raises(ValueError):
-        fetch_mod.fetch("2026-11-21", "morning")
+        fetch_mod.fetch("2026-11-21", "noon")
 
 
 def test_fetch_requires_api_key_and_documents(fake_sources, monkeypatch):
@@ -447,3 +448,34 @@ def test_fetch_holding_details_skips_unreadable(monkeypatch):
     monkeypatch.setattr(fetch_mod.edinet, "fetch_document_csv", lambda k, d, s: calls.append(d) or fake(k, d, s))
     fetch_mod.fetch_holding_details("key", asked, 0, sleep=lambda s: None)
     assert len(calls) == fetch_mod.MAX_DETAIL_FAILURES
+
+
+# --- 朝便と夕方便の切り分け ---
+
+def test_period_splits_morning_and_evening_at_cutoff():
+    evening = fetch_mod.period_for("2026-11-20", "evening", "15:00")
+    assert (evening["days"], evening["after"], evening["before"]) == (["2026-11-20"], None, "15:00")
+    morning = fetch_mod.period_for("2026-11-24", "morning", "15:00")  # 11/23 は祝日、11/21・22 は土日
+    assert (morning["days"], morning["after"], morning["before"]) == (["2026-11-20"], "15:00", None)
+    weekly = fetch_mod.period_for("2026-11-21", "weekly", "15:00")
+    assert weekly["after"] is None and weekly["before"] is None and len(weekly["days"]) == 5
+
+
+def test_in_period_filters_by_time():
+    docs = [doc("180", time_="14:59"), doc("180", time_="15:00"), doc("180", time_="17:10")]
+    day = ["2026-11-13"]
+    assert len(build.in_period(docs, day)) == 3
+    assert [build.submitted_time(d) for d in build.in_period(docs, day, before="15:00")] == ["14:59"]
+    assert [build.submitted_time(d) for d in build.in_period(docs, day, after="15:00")] == ["15:00", "17:10"]
+    assert build.build_filings(docs, CODES, day, 8, 8, after="15:00")["total"] == 2
+
+
+def test_fetch_morning_uses_previous_trading_day_after_cutoff(fake_sources, monkeypatch):
+    asked = []
+    late = [{**d, "submitDateTime": "2026-11-12 16:00"} for d in fake_sources]
+    early = [{**fake_sources[0], "submitDateTime": "2026-11-12 09:00"}]
+    monkeypatch.setattr(fetch_mod.edinet, "fetch_documents", lambda key, date: asked.append(date) or late + early)
+    data = json.loads(fetch_mod.fetch("2026-11-13", "morning").read_text(encoding="utf-8"))
+    assert asked == ["2026-11-12"]
+    assert (data["edition"], data["date"], data["filings"]["total"]) == ("morning", "2026-11-13", 3)
+    assert data["period"]["after"] == "15:00"

@@ -99,7 +99,7 @@ def compose(date: str) -> Path:
     paths = DayPaths.for_date(date)
     manifest = json.loads(paths.audio_manifest.read_text(encoding="utf-8"))
     script = json.loads(paths.script_json.read_text(encoding="utf-8"))
-    timeline = build_timeline(manifest["lines"], cfg["voicevox"]["line_gap_sec"])
+    timeline = build_timeline(manifest["lines"], cfg["voicevox"]["line_gap_sec"], cfg["video"].get("end_screen_sec", 0))
     paths.timeline_json.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding="utf-8")
 
     narration = paths.audio_dir / "narration.wav"

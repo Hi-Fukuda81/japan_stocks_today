@@ -43,7 +43,8 @@ def _md(iso: str) -> str:
 def tag_for(data: dict) -> str:
     if data.get("edition") == "weekly":
         return f"週間まとめ {_md(data['period']['start'])}〜{_md(data['period']['end'])}"
-    return f"きょうの日本株【夕】{_md(data['date'])}"
+    mark = "朝" if data.get("edition") == "morning" else "夕"
+    return f"きょうの日本株【{mark}】{_md(data['date'])}"
 
 
 def render(data: dict, out: Path, font_path: str | None = None) -> Path:

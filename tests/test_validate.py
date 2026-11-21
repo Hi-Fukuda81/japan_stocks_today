@@ -163,3 +163,7 @@ def test_non_string_lines_reported_without_crash(validate_mod, example_script, e
     scenes = [{**s, "lines": [123]} if s["id"] == "05_usdjpy" else s for s in example_script["scenes"]]
     issues, _ = run(validate_mod, {**example_script, "scenes": scenes}, example_data)
     assert any("lines は" in i for i in issues)
+
+
+def test_morning_title_prefix(validate_mod):
+    assert validate_mod.title_prefix({"edition": "morning", "date": "2026-11-20"}) == "きょうの日本株【朝】11/20"

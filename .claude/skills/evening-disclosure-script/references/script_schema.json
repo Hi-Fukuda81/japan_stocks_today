@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "properties": {
     "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "data.json の date と同じ"},
-    "title": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^きょうの日本株【(夕|週間まとめ)】"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 100, "pattern": "^きょうの日本株【(朝|夕|週間まとめ)】"},
     "description_summary": {"type": "string", "minLength": 1},
     "scenes": {
       "type": "array",

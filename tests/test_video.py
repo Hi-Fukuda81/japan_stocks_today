@@ -94,3 +94,15 @@ def test_build_description(example_script):
     assert "VOICEVOX:ずんだもん" in text
     assert "投資助言ではありません" in text
     assert "0:00 オープニング" in text and "公開買付（TOB）" in text
+
+
+def test_end_screen_extends_last_scene():
+    lines = [{"scene_id": "06_jgb", "duration": 3.0}, {"scene_id": "07_ending", "duration": 2.0},
+             {"scene_id": "07_ending", "duration": 2.0}]
+    plain = build_timeline(lines, gap=0.5)
+    tl = build_timeline(lines, gap=0.5, end_screen_sec=20)
+    assert round(tl["total"] - tl["scenes"][-1]["start"], 3) == 20
+    assert tl["lines"][-1]["end"] == tl["total"] and tl["lines"][-1]["display"] > plain["lines"][-1]["display"]
+    assert tl["lines"][0] == plain["lines"][0]
+    long = build_timeline(lines, gap=0.5, end_screen_sec=1)
+    assert long["total"] == plain["total"]  # すでに十分長ければ変えない

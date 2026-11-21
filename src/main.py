@@ -58,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--step", choices=["all", *STEPS], default="all")
     parser.add_argument("--date", type=iso_date, default=datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat(),
                         help="動画の日付 = 開示の対象日 (JST, YYYY-MM-DD)。既定は今日")
-    parser.add_argument("--edition", choices=["evening", "weekly"], default="evening",
+    parser.add_argument("--edition", choices=["morning", "evening", "weekly"], default="evening",
                         help="weekly は土曜の週間まとめ (直近の月〜金)。fetch だけが使い、以降のステップは data.json に従う")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

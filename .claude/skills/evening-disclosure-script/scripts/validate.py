@@ -26,6 +26,7 @@ SCENES = [
     ("07_ending", "ending"),
 ]
 TITLE_PREFIX = "きょうの日本株【夕】"
+MORNING_TITLE_PREFIX = "きょうの日本株【朝】"
 WEEKLY_TITLE_PREFIX = "きょうの日本株【週間まとめ】"
 MAX_LINE_CHARS = 45
 MIN_TOTAL_CHARS = 600
@@ -189,7 +190,8 @@ def title_prefix(data: dict) -> str:
     if data.get("edition") == "weekly":
         period = data.get("period") or {}
         return f"{WEEKLY_TITLE_PREFIX}{_month_day(period.get('start'))}〜{_month_day(period.get('end'))}"
-    return f"{TITLE_PREFIX}{_month_day(data.get('date'))}"
+    prefix = MORNING_TITLE_PREFIX if data.get("edition") == "morning" else TITLE_PREFIX
+    return f"{prefix}{_month_day(data.get('date'))}"
 
 
 def check_structure(script: dict, data: dict) -> list[str]:

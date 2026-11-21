@@ -13,13 +13,13 @@ import requests
 
 from src.config import REPO_ROOT, DayPaths, env, load_config
 from src.data import boj, build, edinet, holdings, mof
-from src.data.calendar_jp import week_trading_days
+from src.data.calendar_jp import previous_trading_day, week_trading_days
 
 log = logging.getLogger(__name__)
 SCHEMA_PATH = Path(__file__).with_name("schema.json")
 LOOKBACK_CALENDAR_DAYS = 75  # 30営業日ぶんの履歴を取るための暦日
 MIN_JGB_ROWS = 8  # 前週末比まで計算できる行数 (今月分で足りなければ全期間の CSV も読む)
-EDITIONS = ("evening", "weekly")
+EDITIONS = ("morning", "evening", "weekly")
 MAX_DETAIL_FAILURES = 5  # EDINET の障害時に、本文の取得で長時間止まらないようにする
 
 
@@ -51,24 +51,35 @@ def fetch_holding_details(api_key: str, doc_ids: list[str], interval: float, sle
     return details
 
 
-def fetch_filings(days: list[str], cfg: dict) -> dict:
+def fetch_filings(period: dict, cfg: dict) -> dict:
+    days, after, before = period["days"], period.get("after"), period.get("before")
     api_key = env("EDINET_API_KEY")
     if not api_key:
         raise RuntimeError("EDINET_API_KEY が設定されていません (.env.example を参照)")
     codes = edinet.load_codes(REPO_ROOT / cfg["codes_csv"], cfg["codes_max_age_days"])
     docs = [doc for day in days for doc in edinet.fetch_documents(api_key, day)]
-    doc_ids = build.holding_doc_ids(docs, codes, days)[: cfg["max_detail_docs"]]
+    doc_ids = build.holding_doc_ids(docs, codes, days, after, before)[: cfg["max_detail_docs"]]
     details = fetch_holding_details(api_key, doc_ids, cfg["detail_interval_sec"])
-    filings = build.build_filings(docs, codes, days, cfg["top_types"], cfg["max_items"], details)
+    filings = build.build_filings(docs, codes, days, cfg["top_types"], cfg["max_items"], details, after, before)
     if filings["total"] == 0:
         raise RuntimeError(f"{days[0]}〜{days[-1]} に提出された書類が EDINET にありません (休日か、まだ反映されていません)")
     return filings
 
 
-def period_for(date: str, edition: str) -> dict:
-    """対象の提出日。夕方便は動画の日付の1日、週間まとめは直近の週の営業日。"""
-    days = week_trading_days(date) if edition == "weekly" else [date]
-    return {"kind": edition, "start": days[0], "end": days[-1], "days": days}
+def period_for(date: str, edition: str, cutoff: str = "15:00") -> dict:
+    """対象の提出日と時刻。朝便と夕方便は cutoff で分け、同じ書類を2回取り上げない。
+
+    - 朝便: 前の営業日の cutoff 以降に提出された書類
+    - 夕方便: 動画の日付の cutoff より前に提出された書類
+    - 週間まとめ: 直近の週の営業日 (時刻では絞らない)
+    """
+    if edition == "weekly":
+        days, after, before = week_trading_days(date), None, None
+    elif edition == "morning":
+        days, after, before = [previous_trading_day(date)], cutoff, None
+    else:
+        days, after, before = [date], None, cutoff
+    return {"kind": edition, "start": days[0], "end": days[-1], "days": days, "after": after, "before": before}
 
 
 def _lag_notes(period: dict, usdjpy: dict, jgb: dict) -> list[str]:
@@ -81,9 +92,9 @@ def fetch(date: str, edition: str = "evening") -> Path:
     if edition not in EDITIONS:
         raise ValueError(f"不明な便です: {edition}")
     cfg = load_config()["data"]
-    period = period_for(date, edition)
+    period = period_for(date, edition, cfg["edinet"]["cutoff"])
     base_before = period["start"] if edition == "weekly" else None
-    filings = fetch_filings(period["days"], cfg["edinet"])
+    filings = fetch_filings(period, cfg["edinet"])
     fx_rows = boj.fetch_usdjpy(cfg["usdjpy"]["series"], period["end"], LOOKBACK_CALENDAR_DAYS)
     jgb_rows = mof.fetch_yields(period["end"], min_rows=MIN_JGB_ROWS)
     usdjpy = build.build_usdjpy(fx_rows, cfg["usdjpy"]["history_days"], base_before)

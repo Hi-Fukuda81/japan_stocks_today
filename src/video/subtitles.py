@@ -13,7 +13,7 @@ LEAD_IN_SEC = 0.5   # 冒頭の無音
 TAIL_SEC = 1.5      # 最後のセリフのあとの余白
 
 
-def build_timeline(lines: list[dict], gap: float) -> dict:
+def build_timeline(lines: list[dict], gap: float, end_screen_sec: float = 0.0) -> dict:
     """各セリフの開始・終了時刻と、シーンごとの開始時刻を計算する。
 
     各セリフは「音声の長さ + gap」だけ画面に表示する。冒頭の無音は最初のセリフに、末尾の余白は最後のセリフに含める。
@@ -33,6 +33,12 @@ def build_timeline(lines: list[dict], gap: float) -> dict:
         entries.append({**line, "start": round(start, 3), "speech_start": round(speech_start, 3),
                         "end": round(end, 3), "display": round(end - start, 3)})
         t = end
+    # 最後のシーン (終了画面) を end_screen_sec 以上にする。足りない分は最後のセリフの表示を延ばす
+    extra = end_screen_sec - (t - scenes[-1]["start"])
+    if extra > 0:
+        last = entries[-1]
+        t = last["end"] + extra
+        entries[-1] = {**last, "end": round(t, 3), "display": round(t - last["start"], 3)}
     return {"total": round(t, 3), "lines": entries, "scenes": scenes}
 
 
