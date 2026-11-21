@@ -42,18 +42,46 @@ def build_timeline(lines: list[dict], gap: float, end_screen_sec: float = 0.0) -
     return {"total": round(t, 3), "lines": entries, "scenes": scenes}
 
 
-def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    """日本語向けに1文字ずつ詰めて折り返す。句読点が行頭に来ないようにする。"""
+NO_LINE_START = "、。」）)％%ーぁぃぅぇぉっゃゅょァィゥェォッャュョ"
+COMMA_BONUS = 0.35  # 読点の直後で折り返す案を、行の長さの差 (行幅に対する割合) がこれだけ大きくても選ぶ
+
+
+def _greedy_wrap(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
     rows, current = [], ""
     for ch in text:
-        if font.getlength(current + ch) <= max_width or (ch in "、。」）)" and current):
+        if font.getlength(current + ch) <= max_width or (ch in NO_LINE_START and current):
             current += ch
         else:
             rows.append(current)
             current = ch
-    if current:
-        rows.append(current)
-    return rows
+    return rows + [current] if current else rows
+
+
+def _can_break(text: str, i: int) -> bool:
+    """text[:i] と text[i:] に分けてよいか。行頭に置けない文字の前と、英数字・数値の途中では分けない。"""
+    left, right = text[i - 1], text[i]
+    if right in NO_LINE_START or left in "「（(":
+        return False
+    return not (left.isascii() and right.isascii() and left != " " and right != " ")
+
+
+def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+    """字幕の折り返し。2行に収まるなら、行の長さが近く、できれば読点の直後になる位置で分ける。
+
+    「〜なりまし / た。」のように最後の行が数文字だけになるのを防ぐ。3行以上になる長い文は、端から詰める。
+    """
+    greedy = _greedy_wrap(text, font, max_width)
+    if len(greedy) != 2:
+        return greedy
+    best, best_cost = None, None
+    for i in range(1, len(text)):
+        left, right = font.getlength(text[:i]), font.getlength(text[i:])
+        if left > max_width or right > max_width or not _can_break(text, i):
+            continue
+        cost = abs(left - right) / max_width - (COMMA_BONUS if text[i - 1] == "、" else 0)
+        if best_cost is None or cost < best_cost:
+            best, best_cost = i, cost
+    return greedy if best is None else [text[:best], text[best:]]
 
 
 def draw_subtitle(base: Path, text: str, out: Path, font_path: str, band_ratio: float) -> None:

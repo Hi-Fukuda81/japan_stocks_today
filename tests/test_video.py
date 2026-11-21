@@ -106,3 +106,15 @@ def test_end_screen_extends_last_scene():
     assert tl["lines"][0] == plain["lines"][0]
     long = build_timeline(lines, gap=0.5, end_screen_sec=1)
     assert long["total"] == plain["total"]  # すでに十分長ければ変えない
+
+
+def test_wrap_text_avoids_short_last_line_and_prefers_comma():
+    font = ImageFont.truetype(load_config()["video"]["font"], 40)
+    width = int(font.getlength("あ" * 20))
+    rows = wrap_text("あ" * 21 + "た。", font, width)  # 端から詰めると2行目が「た。」だけになる
+    assert len(rows) == 2 and min(len(r) for r in rows) >= 10 and "".join(rows) == "あ" * 21 + "た。"
+    comma = wrap_text("あ" * 9 + "、" + "い" * 14, font, width)
+    assert comma == ["あ" * 9 + "、", "い" * 14]
+    number = wrap_text("あ" * 10 + "16.52%" + "い" * 10, font, int(font.getlength("あ" * 14)))
+    assert any("16.52%" in r for r in number)  # 数値の途中では分けない
+    assert wrap_text("短い文です。", font, width) == ["短い文です。"]
