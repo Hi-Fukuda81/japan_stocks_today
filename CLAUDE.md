@@ -12,13 +12,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 夕方便（大引け後の開示まとめ）と土曜の週間まとめの fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
 - 実データ（2026-11-16〜11-20 の週間まとめ）で fetch → tts → visual → video を動かした（`tmp/real/`）。そのときの台本は手書きで、`claude -p` での台本生成と YouTube への投稿は未実行。夕方便は実データでまだ動かしていない。
 - launchd は未登録（`scripts/install_launchd.sh install` を実行していない）。まず手動で1本を最後まで作ってから登録する。
-- 未実装: 朝便の自動実行、TDnet・JPX のデータ（決算短信など）、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
+- 未実装: 朝便の自動実行（朝便と夕方便は同じ日付なので、いまの `output/DATE/` のままでは成果物が衝突する。置き場所を分けてから `src/daily.py` と launchd に組み込む。月曜の朝も金曜15時以降の分で出す、とユーザーが決めた）、TDnet・JPX のデータ（決算短信など）、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
 
 次のことは勝手に決めず、ユーザーに確認する: YouTube チャンネルと OAuth クライアントの使い方、公開のしかた（予約公開にするか）、VOICEVOX の声の割り当て、新しいデータソースの追加。
 
 ## チャンネル概要
 
-- チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドル候補は `@JapanStocksToday`（使用済みなら `@kyonihonkabu`）
+- チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドルは `@JapanStocksToday`（2026-11-22 に作成。米国株モーニングデータと同じ Google アカウントのブランドアカウント）
+- YouTube API 用の Google Cloud プロジェクトは `japan-stocks-today`（このチャンネル専用。YouTube Data API v3 を有効化済み）。OAuth 同意画面とクライアントの作成、`secrets/client_secret.json` の配置、`--auth` はまだ
+- チャンネルアートは `uv run python -m src.branding.channel_art` で `assets/branding/`（banner.png、icon.png）に生成する。米国株モーニングデータと同じ構図で、強調色をオレンジにしてある。チャンネルへの設定はまだ
 - 対象：日本株の個人投資家
 - 主役は「公的な一次データ（開示・統計）の読み解き」。株価チャートを並べる動画にはしない
 - 動画タイトルは `きょうの日本株【夕】11/20 ...`（朝便は `【朝】`）、週間まとめは `きょうの日本株【週間まとめ】11/16〜11/20 ...` で始める。validate.py が検査する
