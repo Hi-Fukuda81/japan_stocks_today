@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - YouTube API 用の Google Cloud プロジェクトは `japan-stocks-today`（このチャンネル専用。YouTube Data API v3 を有効化済み）。OAuth クライアント（デスクトップ）を作り、`--auth` 済み（2026-11-22）。チャンネル ID は `UC9MAS5rTzoS5Y-jZIsfiVig`。**OAuth はまだ「テスト中」で、リフレッシュトークンが7日で切れる。** 本番に切り替えるにはブランディングにホームページ・プライバシーポリシー・利用規約の URL が要る（finance_news_ch は Google サイトで用意した）。切り替えたら `--auth` をやり直す
 - チャンネルは電話番号の確認がまだなので、カスタムサムネイルを設定できない（投稿は成功し、サムネイルだけ失敗する）。https://www.youtube.com/verify で確認する
 - 2026-11-22 に週間まとめ（11/16〜11/20）を非公開で投稿して、upload まで通ることを確認した
-- チャンネルアートは `uv run python -m src.branding.channel_art` で `assets/branding/`（banner.png、icon.png）に生成する。米国株モーニングデータと同じ構図で、強調色をオレンジにしてある。チャンネルへの設定はまだ
+- チャンネルアートは `uv run python -m src.branding.channel_art` で `assets/branding/`（banner.png、icon.png）に生成する。米国株モーニングデータと同じ構図で、強調色をオレンジにしてある。バナー・アイコン・説明文は 2026-11-22 にチャンネルへ設定済み
 - 対象：日本株の個人投資家
 - 主役は「公的な一次データ（開示・統計）の読み解き」。株価チャートを並べる動画にはしない
 - 動画タイトルは `きょうの日本株【夕】11/20 ...`（朝便は `【朝】`）、週間まとめは `きょうの日本株【週間まとめ】11/16〜11/20 ...` で始める。validate.py が検査する
@@ -153,6 +153,7 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 - 投資の推奨（「買い」「売り」「今が買い時」など）・価格予想・売買の示唆をしない。事実と、その読み解きに限る。
 - 銘柄名・数値は data.json にあるものだけを使う。計算・推測・記憶から数字を出さない。
 - 推測は推測とわかる言い方にする（「〜とみられます」など）。
+- サムネイル（`src/visuals/thumbnail.py`）は finance_news_ch と構図を揃える（左上に赤いタグ、極太の縁取り文字、背景に図、下端に小さなパネル）。主役は保有割合がいちばん動いた大量保有報告で、言葉は「保有増」「保有減」「新規保有」だけ。地味な配色に戻さない（ユーザーに「ダサい」と却下された）。
 - 免責文は読み上げない。エンディング画面に薄い色で小さく表示し、概要欄にも入れる（どちらも `config.yaml` の `channel.disclaimer` から自動）。
 - 概要欄には `VOICEVOX:<キャラ名>` のクレジットとデータ出典が自動で入る。
 
