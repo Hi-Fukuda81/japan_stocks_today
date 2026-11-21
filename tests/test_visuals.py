@@ -82,3 +82,15 @@ def test_ending_credit_prefers_manifest(tmp_path):
     paths.audio_manifest.parent.mkdir(parents=True, exist_ok=True)
     paths.audio_manifest.write_text('{"speaker_name": "青山龍星", "lines": []}', encoding="utf-8")
     assert speaker_name(paths, cfg, "2026-11-18") == "青山龍星"
+
+
+def test_thumbnail_star_is_biggest_move_then_biggest_new(example_data, tmp_path):
+    assert thumbnail.star(example_data)["issuer"] == "例示ロジスティクス"
+    f = example_data["filings"]
+    only_new = [x for x in f["large_holdings"]["items"] if x["direction"] == "新規"]
+    data = {**example_data, "filings": {**f, "large_holdings": {**f["large_holdings"], "items": only_new}}}
+    assert thumbnail.star(data)["ratio_pct"] == 7.48
+    empty = {**example_data, "filings": {**f, "large_holdings": {**f["large_holdings"], "items": []}}}
+    assert thumbnail.star(empty) is None
+    for i, d in enumerate((example_data, data, empty)):
+        assert thumbnail.render(d, tmp_path / f"t{i}.png").exists()
