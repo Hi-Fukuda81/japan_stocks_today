@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # きょうの日本株 / Japan Stocks Today
 
 日本株の開示を読み解く動画を自動生成し、YouTube に投稿するパイプライン。
-米国株チャンネル（`../finance_news_ch`、「米国株モーニングデータ」）と同じ構成・運用で、チャンネルとリポジトリは別。
+米国株チャンネル（`../finance_news_ch`、「きょうの米国株」`@USStocksToday`。2026-11-22 に「きょうの米国株」から改名）と同じ構成・運用で、チャンネルとリポジトリは別。
 
 ## 現状
 
@@ -18,11 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## チャンネル概要
 
-- チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドルは `@JapanStocksToday`（2026-11-22 に作成。米国株モーニングデータと同じ Google アカウントのブランドアカウント）
+- チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドルは `@JapanStocksToday`（2026-11-22 に作成。きょうの米国株と同じ Google アカウントのブランドアカウント）
 - YouTube API 用の Google Cloud プロジェクトは `japan-stocks-today`（このチャンネル専用。YouTube Data API v3 を有効化済み）。OAuth クライアント（デスクトップ）を作り、`--auth` 済み（2026-11-22）。チャンネル ID は `UC9MAS5rTzoS5Y-jZIsfiVig`。OAuth は 2026-11-22 に「本番環境」へ切り替えた（未審査。テスト中だとリフレッシュトークンが7日で切れるため）。ホームページ・プライバシーポリシー・利用規約は Google サイト https://sites.google.com/view/japan-stocks-today （`/privacy`、`/terms`。検索エンジンには出さない設定）。**切り替え前に取ったトークンは7日で切れるので、`--auth` をやり直す必要がある**（やり直したらこの注記を消す）
 - チャンネルは電話番号の確認済み（カスタムサムネイルを設定できる）。動画の透かしは `assets/branding/watermark.png`（アイコンを 150x150 にしたもの）を設定済み
 - 2026-11-22 に週間まとめ（11/16〜11/20）を非公開で投稿して、upload まで通ることを確認した
-- チャンネルアートは `uv run python -m src.branding.channel_art` で `assets/branding/`（banner.png、icon.png）に生成する。米国株モーニングデータと同じ構図で、強調色をオレンジにしてある。バナー・アイコン・説明文は 2026-11-22 にチャンネルへ設定済み
+- チャンネルアートは `uv run python -m src.branding.channel_art` で `assets/branding/`（banner.png、icon.png）に生成する。きょうの米国株と同じ構図で、強調色をオレンジにしてある。バナー・アイコン・説明文は 2026-11-22 にチャンネルへ設定済み。説明文は `assets/branding/description.txt`（きょうの米国株と同じ構成で、互いを「姉妹チャンネル」として載せる。チャンネルのリンクにも姉妹チャンネルを入れてある）
 - 対象：日本株の個人投資家
 - 主役は「公的な一次データ（開示・統計）の読み解き」。株価チャートを並べる動画にはしない
 - 動画タイトルは `きょうの日本株【夕】11/20 ...`（朝便は `【朝】`）、週間まとめは `きょうの日本株【週間まとめ】11/16〜11/20 ...` で始める。validate.py が検査する
