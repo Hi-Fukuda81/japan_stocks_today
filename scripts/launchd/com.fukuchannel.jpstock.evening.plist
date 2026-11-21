@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.fukuchannel.jpstock.evening</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/zsh</string><string>__REPO__/scripts/run_daily.sh</string></array>
+  <key>WorkingDirectory</key><string>__REPO__</string>
+  <!-- 夕方便: 月〜金の 16:00 JST (大引け 15:30 のあと)。祝日・年末年始は src/daily.py がスキップする -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>16</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>__REPO__/logs/launchd.evening.out.log</string>
+  <key>StandardErrorPath</key><string>__REPO__/logs/launchd.evening.err.log</string>
+</dict>
+</plist>

@@ -4,104 +4,156 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # きょうの日本株 / Japan Stocks Today
 
-日本株のニュースを1日2回（朝・夕方）配信するYouTubeチャンネルの、動画自動生成プロジェクト。
-米国株チャンネルとは別のチャンネル・別のリポジトリとして運用する。
+日本株の開示を読み解く動画を自動生成し、YouTube に投稿するパイプライン。
+米国株チャンネル（`../finance_news_ch`、「米国株モーニングデータ」）と同じ構成・運用で、チャンネルとリポジトリは別。
 
-## 現状（2026-11-21時点）
+## 現状
 
-- リポジトリにあるのはこの `CLAUDE.md` だけ。コード、依存関係の定義、テストはまだない。`git init` もしていない。
-- 使用言語、パッケージ管理、ビルド・lint・テストのコマンドは未定。決まったら、この節を「コマンド」節に置き換えて実際のコマンド（テスト1件だけ実行する方法を含む）を書く。
-- 下の「制作パイプライン」「ディレクトリ構成（案）」は計画であり、実装済みの構造ではない。実装が計画と変わったら、このファイルを実態に合わせて直す。
+- 夕方便（大引け後の開示まとめ）の fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
+- 見本データ（`.claude/skills/evening-disclosure-script/examples/`、社名と件数は架空）で tts → video までは実際に動かした。
+- **実データでの通し実行はまだ。** `EDINET_API_KEY` が未設定のため fetch を実際の EDINET に対して動かしていない。`claude -p` での台本生成、YouTube への投稿も未実行。
+- launchd は未登録（`scripts/install_launchd.sh install` を実行していない）。まず手動で1本を最後まで作ってから登録する。
+- 未実装: 朝便、TDnet・JPX のデータ、大量保有報告書の保有割合（書類本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
+
+次のことは勝手に決めず、ユーザーに確認する: YouTube チャンネルと OAuth クライアントの使い方、公開のしかた（予約公開にするか）、VOICEVOX の声の割り当て、新しいデータソースの追加。
 
 ## チャンネル概要
 
-- チャンネル名：きょうの日本株（英語名：Japan Stocks Today）
-- ハンドル候補：`@JapanStocksToday`（使用済みなら `@kyonihonkabu`）
+- チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドル候補は `@JapanStocksToday`（使用済みなら `@kyonihonkabu`）
 - 対象：日本株の個人投資家
 - 主役は「公的な一次データ（開示・統計）の読み解き」。株価チャートを並べる動画にはしない
-- ナレーション：VOICEVOX
+- 動画タイトルは `きょうの日本株【夕】11/21 ...`（朝便は `【朝】`）で始める。validate.py が検査する
+- 東証の休場日（土日・祝日・12/31〜1/3）は配信しない
 
-## 配信スケジュール
+| 便 | 公開時刻（JST） | 内容 | 状態 |
+|---|---|---|---|
+| 夕方便 | 16:00〜17:00（大引け後） | 当日の EDINET 提出書類、直近のドル円・国債金利 | 実装済み |
+| 朝便 | 8:00ごろ（寄り付き前） | 前日15時以降の開示・決算のまとめ、今日の決算発表予定、朝の為替 | 未実装 |
 
-| 便 | 公開時刻（JST） | 内容 |
-|---|---|---|
-| 朝便 | 8:00ごろ（寄り付き前） | 前日15時以降の適時開示・決算のまとめ、今日の決算発表予定、朝の為替 |
-| 夕方便 | 16:00〜17:00（大引け後） | 当日の開示・決算のハイライト、市場の反応への一言コメント |
+## コマンド
 
-- 動画タイトルの形式：`きょうの日本株【朝】11/21 ...` / `きょうの日本株【夕】11/21 ...`
-- 東証の休場日（土日・祝日・年末年始）は配信しない
+```bash
+uv sync                                                        # 依存関係 (Python 3.12 以上)
+uv run python -m src.main --date 2026-11-20                    # 全ステップ (fetch → script → tts → visual → video → upload)
+uv run python -m src.main --step visual --date 2026-11-20      # 1ステップだけ再実行
+uv run pytest                                                  # 全テスト
+uv run pytest tests/test_validate.py::test_ng_word_detected    # 1テストだけ
+uv run pytest --cov=src --cov=.claude/skills/evening-disclosure-script/scripts
+uv run python .claude/skills/evening-disclosure-script/scripts/validate.py output/2026-11-20   # 台本の検証 (0=OK, 1=NG)
+uv run python -m src.upload.youtube --auth                     # YouTube の OAuth 認証 (初回・期限切れ時)
+uv run python -m src.daily                                     # 無人実行と同じ処理 (今日の日付、ロック・休場スキップ・投稿済み判定・通知つき)
+scripts/install_launchd.sh install|uninstall|status            # launchd (月〜金 16:00 の夕方便) の登録
+```
 
-## データソース（無料のものだけ使う）
+- `--date` は動画の日付（JST）で、その日に EDINET へ提出された書類を対象にする。
+- `script` ステップは実際に `claude -p` を起動する（サブスク枠を消費する）。テストでは必ずモックにする。
+- `upload` ステップは実際に YouTube に投稿する。`output/DATE/upload.json` があれば投稿済みとしてスキップする。
+- 秘密情報（`.env`、`secrets/client_secret.json`、`secrets/youtube_token.json`）は git に入れない。`.env` に必要な値は `.env.example` を参照。`EDINET_API_KEY` は必須。
+- launchd からの `claude -p` は通常ログインだと数日で切れるので、`.env` の `CLAUDE_CODE_OAUTH_TOKEN`（`claude setup-token` で発行）を使う。
+- 実行ログは `logs/YYYY-MM-DD.log`。ユーザーに見せる試作は `tmp/`（git 管理外）に置く。
+- 読みの確認: tts ステップが `output/DATE/audio/readings.txt` に各セリフの読み（カナ）を出す。誤読は、語の読みが一定なら `config.yaml` の `user_dict`、文脈で読みが変わる語なら `tts_replacements`（字幕は変えず読み上げ文だけ置換）で直す。
 
-| 用途 | ソース | 備考 |
-|---|---|---|
-| 有価証券報告書・大量保有報告書など | EDINET API | 無料。APIキーが必要 |
-| 決算短信・業績修正などの適時開示 | TDnet | 閲覧は無料。自動取得してよいかは利用規約を確認してから実装する |
-| 空売り比率（日次）、信用残・投資部門別売買状況（週次） | JPX公表データ | 利用条件を確認してから使う |
-| 為替 | 日銀 時系列統計 | |
-| 国債金利 | 財務省 国債金利情報 | |
+### finance_news_ch と共用しているもの
+
+- **VOICEVOX Engine**: `~/apps/voicevox_engine/` を finance_news_ch 側の launchd（`com.fukuchannel.usstock.voicevox`、KeepAlive、`127.0.0.1:50021`）が常駐させている。このリポジトリからは登録しない。手で起動しない（ポートが競合する）。死活確認は `curl http://127.0.0.1:50021/version`。ユーザー辞書も共用なので、`user_dict` に入れた語は米国株側の読みにも効く。
+- **コード**: `src/tts/`、`src/video/`、`src/upload/youtube.py`、`src/script/runner.py`、`src/notify.py`、`src/config.py`、`scripts/` は finance_news_ch からのコピー。共通の不具合を直すときは両方を直す。
+
+## アーキテクチャ
+
+### ステップ間はファイルだけで受け渡す
+
+```
+fetch  (src/data/fetch.py)        → data.json            (スキーマ: src/data/schema.json)
+script (src/script/runner.py)     → script.json          (claude -p でスキルを起動)
+tts    (src/tts/synthesize.py)    → audio/SS_LL.wav + audio/manifest.json (各セリフの秒数)
+visual (src/visuals/render.py)    → img/<scene_id>.png (+ グラフは img/<scene_id>_anim/) + thumbnail.png
+video  (src/video/compose.py)     → timeline.json, frames/, audio/narration.wav, video.mp4, description.txt
+upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開で投稿)
+```
+
+すべて `output/DATE/` 配下。パスは `src/config.py` の `DayPaths` に集約している。
+各ステップは前のステップの成果物ファイルだけを入力にし、メモリ上の状態を共有しない。これにより任意のステップを単独で再実行できる。
+`output/DATE/` は再審査請求に備えた制作過程の記録でもある（取得データと台本が残る）。mp4 と json は掃除の対象外。
+
+### データ取得
+
+| 用途 | ソース | モジュール | 備考 |
+|---|---|---|---|
+| 提出書類の一覧（大量保有・臨時報告書・公開買付など） | EDINET API v2 | `src/data/edinet.py` | 無料。API キーが必要 |
+| 提出者名・証券コード | EDINET コード一覧（zip） | 同上 | `data/edinet_codes.csv` にキャッシュ（30日で更新、git 管理外） |
+| ドル円（東京市場 17時時点） | 日銀 時系列統計データ検索サイト API | `src/data/boj.py` | 系列 `FXERD04` |
+| 国債金利 | 財務省 国債金利情報 CSV | `src/data/mof.py` | 今月分で足りなければ全期間の CSV も読む。和暦の日付 |
+| 決算短信・業績修正などの適時開示 | TDnet | 未実装 | 自動取得してよいか利用規約を確認してから実装する |
+| 空売り比率、信用残、投資部門別売買状況 | JPX 公表データ | 未実装 | 利用条件を確認してから使う |
+
+- `src/data/build.py` は取得した生データから data.json の各節を組み立てる純粋関数だけを置く。通信は各ソースのモジュールに閉じる。
+- ドル円と国債金利は公表が遅れるので、夕方の時点では前営業日以前の値になる。data.json の `usdjpy.date`・`jgb.date` と `notes` に実際の日付が入り、台本も図もその日付を言う。
+- 大量保有・臨時報告書の一覧（`items`）は上場会社に関するものだけ。件数（`count`）は全体。
+- 臨時報告書の提出事由は、開示府令19条2項の号を `build.REPORT_REASONS` で日本語にしている。確実な号だけを載せ、表にない号の書類は一覧に出さない。
+- `data.reference` は制度上の基準値（大量保有報告書の5%など）。台本で制度を説明するときの数値も照合対象にするために data.json に入れている。
+- 営業日判定は `src/data/calendar_jp.py`（`jpholiday` + 年末年始）。
 
 ### データに関するルール
 
-- **株価・指数の時系列データは使わない。** 無料で動画に使ってよい入手先がないため。
-  - 指数は「日経平均は○円高で引けた」と事実を一言触れる程度にとどめ、チャートは描かない。
+- **株価・指数の時系列データは使わない。** 無料で動画に使ってよい入手先がないため。指数は事実を一言触れる程度にとどめ、チャートは描かない（現状の data.json には指数の値がないので、台本でも触れない）。
 - **規約で禁止されているサイトはスクレイピングしない**（Yahoo!ファイナンス、株探、まとめサイトなど）。
-- 新しいデータソースを追加するときは、先に利用規約（自動取得・商用利用・動画への転載）を確認し、このファイルの表に追記する。
-- 動画の概要欄に、使ったデータの出典を必ず書く。
+- 新しいデータソースを追加するときは、先に利用規約（自動取得・商用利用・動画への転載）を確認し、上の表に追記する。`config.yaml` の `channel.data_credits`（概要欄とエンディングに出る出典）にも足す。
 
-## 制作パイプライン
+### シーン構成は固定
 
-実行環境は自宅のMacBook。台本はClaude APIではなくClaude Code（スキル）で作る。
+`01_opening → 02_overview → 03_holdings → 04_events → 05_usdjpy → 06_jgb → 07_ending`
 
-1. **データ取得**：各ソースから当日分を取得して `data/YYYY-MM-DD/` に保存
-2. **台本生成**：Claude Codeのスキルで台本を作る（`claude -p` でヘッドレス実行）
-3. **音声合成**：VOICEVOXのローカルエンジンで読み上げ
-4. **図表・映像**：取得したデータから図表を描き、音声と合わせてレンダリング
-5. **アップロード**：YouTube Data APIで予約公開
+シーン ID と visual ID（`title` / `filings_bar` / `holdings_table` / `events_list` / `usdjpy_line` / `jgb_yields` / `ending`）は、スキルの `script_schema.json`、`validate.py` の `SCENES`、`src/visuals/render.py` の描画関数の対応、`src/upload/description.py` の目次ラベルが共有している。変えるときは4か所を揃える。
 
-### スケジュール実行
+### 決定的な Python と Claude Code の役割分担
 
-- `launchd` でジョブを起動する（朝便・夕方便で別のジョブにする）
-- MacBookがスリープしていると動かないので、`pmset repeat wakeorpoweron` で起動時刻の少し前に自動で起こす
-- YouTube Data APIのアップロードは1本あたり1,600ユニット、デフォルト上限は1日10,000ユニット。1日2本なら上限に余裕がある
+- データ取得・音声・図表・動画・投稿は Python で決定的に作る。文章を作るのは台本スキル（`.claude/skills/evening-disclosure-script/`）だけ。
+- `src/script/runner.py` は `claude -p "/evening-disclosure-script DATE"` を、読める場所と書ける場所を `output/` とスキルに絞って起動する（Web 取得・検索は禁止）。プロンプトは Python 側に持たない。
+- スキルが OK と報告しても、runner が最後に `validate.py` を再実行する（最終ゲート）。
+- `validate.py` は標準ライブラリだけで動き、台本の単位付きの数値（件・%・ポイント・円・銭）と日付がすべて data.json にあるか、前日比の向き（上昇/低下、円安/円高）が合っているか、NG ワード（`references/ng_words.md`）がないか、シーン構成・字数・タイトルの書き出しを検査する。単位ごとに照合してよいフィールドは `UNIT_FILTERS` で絞っている。data.json に新しい数値を足すときは、どの単位で照合されるかをここで確認する。
 
-## 量産型コンテンツと判定されないための方針
+### 映像と音声の同期
 
-YouTubeは2025年7月から「非本物コンテンツ（inauthentic content）」として、テンプレート的な量産動画の収益化を厳しくしている。次のことを守る。
+`src/video/subtitles.py` の `build_timeline` が manifest の秒数から各セリフの表示区間を決め、同じタイムラインで (1) 無音を挟んだ narration.wav（`src/video/audio.py`）と (2) ffconcat の画像表示時間を作る。ずれが出たらここを見る。
+グラフのシーン（`render.ANIMATED`）は progress 0〜1 で途中のコマも描け、`compose.plan_frames` がシーン冒頭のセリフの表示時間の中にコマを差し込む。各セリフの表示時間の合計は変えないので尺は伸びない。
+この環境の ffmpeg には libass がないため、字幕は PIL で各フレーム画像に焼き込んでいる。図表は画面下 17%（`theme.SUBTITLE_BAND_RATIO`）を字幕用に空けて描く。
 
-- 開示を読み上げるだけにしない。毎回「なぜ重要か」「市場はどう見ているか」の解説を入れる
-- 台本の型を複数用意し、動画ごとの構成や言い回しが似すぎないようにする
-- 人が台本を確認し、手を入れてから公開する工程を残す
-- 再審査請求に備えて、制作過程（取得データ、台本の修正履歴）を残しておく
+## 台本・動画のコンプライアンス（必須）
 
-## 台本のルール
+スキルの台本だけでなく、概要欄・サムネイル・テンプレ文言を作るときも守る。
 
-- 投資の推奨（「買い」「売り」「今が買い時」など）はしない。事実と、その読み解きに限る
-- 銘柄名・数値は取得したデータと照合する。データにない数値を台本に書かない
-- 推測は推測とわかる言い方にする（「〜とみられます」など）
-- 動画の冒頭か概要欄に「投資判断はご自身で」という注意書きを入れる
+- 投資の推奨（「買い」「売り」「今が買い時」など）・価格予想・売買の示唆をしない。事実と、その読み解きに限る。
+- 銘柄名・数値は data.json にあるものだけを使う。計算・推測・記憶から数字を出さない。
+- 推測は推測とわかる言い方にする（「〜とみられます」など）。
+- 免責文は読み上げない。エンディング画面に薄い色で小さく表示し、概要欄にも入れる（どちらも `config.yaml` の `channel.disclaimer` から自動）。
+- 概要欄には `VOICEVOX:<キャラ名>` のクレジットとデータ出典が自動で入る。
+
+### 量産型コンテンツと判定されないための方針
+
+YouTube は2025年7月から「非本物コンテンツ（inauthentic content）」として、テンプレート的な量産動画の収益化を厳しくしている。
+
+- 開示を読み上げるだけにしない。毎回「なぜ重要か」「何を意味するか」の解説を入れる（スキルの `style_guide.md`「解説」）。
+- **人が台本と動画を確認してから公開する。** そのため `config.yaml` の `upload.privacy` は `private`、`publish_at` は `null`（予約公開しない）にしてある。投稿後の通知を見て、YouTube Studio で確認・修正してから公開する。finance_news_ch は予約公開だが、こちらは変えない。
+- 台本の型を複数用意し、動画ごとの構成や言い回しが似すぎないようにする（現状はシーン構成が1種類。型を増やすのは今後の課題）。
+- 再審査請求に備えて、制作過程（`output/DATE/` の data.json と script.json、台本の修正履歴）を残しておく。
 
 ## VOICEVOX
 
-- 使うキャラクターの利用規約を確認し、概要欄にクレジット（例：`VOICEVOX:ずんだもん`）を必ず書く
-- キャラクター名をチャンネル名やサムネイルで使う場合は、そのキャラの規約で許されているか確認する
+- 声は曜日ごとの日替わり（`config.yaml` の `voicevox.voices`、`src/tts/voices.py` の `pick_voice` が動画の日付の曜日で選ぶ）。finance_news_ch の割り当てを平日に当てはめた仮の設定で、ユーザーの確認はまだ。入れ替えはユーザーに確認する。
+- 使うキャラクターの利用規約を確認する。No.7 は個人の非商用（配信収入は可）、青山龍星は個人なら可（企業が関わる場合は事前確認が必要）。
+- キャラクター名をチャンネル名やサムネイルで使う場合は、そのキャラの規約で許されているか確認する。
 
-## ディレクトリ構成（案）
+## macOS / launchd 固有の注意
 
-```
-.
-├── CLAUDE.md
-├── .claude/skills/      # 台本生成スキル（朝便・夕方便）
-├── fetchers/            # データソースごとの取得スクリプト
-├── data/YYYY-MM-DD/     # 取得した生データ（日付ごと）
-├── scripts/             # 生成した台本（動画のscript。実行スクリプトの置き場ではない）
-├── audio/               # VOICEVOXの出力
-├── render/              # 図表・動画のレンダリング
-├── upload/              # YouTube Data APIでのアップロード
-└── launchd/             # 朝便・夕方便のplist
-```
+- 実行環境は自宅の MacBook。launchd はユーザーエージェント（`~/Library/LaunchAgents`）にする。キーチェーンにある Claude Code の認証情報を読むため。LaunchDaemon にはしない。
+- launchd 実行時は PATH が最小限になるため、`scripts/run_daily.sh` で `/opt/homebrew/bin` などを明示している。
+- スリープしていると動かないので、`pmset repeat wakeorpoweron` で起動時刻の少し前に自動で起こす（finance_news_ch の朝 6:30 と時刻が別なので、設定を上書きしないよう注意する。`pmset repeat` は1つしか持てない）。
+- パイプラインは `caffeinate -i` で包む。ロックファイル `output/.lock` で多重起動を防ぐ。
+- ffmpeg のエンコードは `h264_videotoolbox`、使えなければ `libx264 -preset veryfast`。1920x1080 / 30fps / AAC。
+- YouTube Data API のアップロードは1本あたり1,600ユニット、デフォルト上限は1日10,000ユニット。
 
-## 進め方
+## テストの方針
 
-1. まず夕方便（大引け後の開示まとめ）を1本、手動で最後まで作る
-2. パイプラインが安定したら自動化し、朝便を追加する
+- テストでは Claude Code・VOICEVOX・EDINET・日銀・財務省・YouTube を実際に呼ばない（すべてモック / フェイク）。
+- `tests/conftest.py` の `validate_mod` fixture で validate.py をモジュールとして読み込み、`day_dir` fixture でスキルの見本の data/script を置いた日付ディレクトリを作る。見本を変えると多くのテストの期待値に影響する。
+- 見本データの提出書類は架空の社名にしてある（公開リポジトリなので、実在の会社について架空の開示を書かない）。

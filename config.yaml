@@ -1,0 +1,84 @@
+# 動画生成パイプライン設定 (夕方便)
+
+data:
+  edinet:
+    codes_csv: data/edinet_codes.csv   # EDINET コード一覧のキャッシュ (自動でダウンロードする。git には入れない)
+    codes_max_age_days: 30
+    top_types: 8                       # 書類種別の件数グラフに出す数
+    max_items: 8                       # 大量保有・臨時報告書の一覧に出す数 (上場会社に関するものだけ)
+  usdjpy:
+    series: FXERD04                    # 日銀 時系列統計: 東京市場 ドル・円 スポット 17時時点
+    history_days: 30
+  jgb:
+    tenors: ["2年", "5年", "10年", "20年", "30年"]
+
+script:
+  skill: evening-disclosure-script
+  max_turns: 30
+  timeout_sec: 900
+
+voicevox:
+  url: "http://127.0.0.1:50021"        # 米国株チャンネル (finance_news_ch) が launchd で常駐させている Engine を共用する
+  speed: 1.15
+  # 曜日ごとの声 (動画の日付の曜日で決まる)。name は概要欄・エンディングのクレジット用
+  # 規約: No.7 は個人の非商用 (配信収入は可)、青山龍星は個人なら可 (企業が関わる場合は事前確認が必要)
+  voices:
+    mon: {speaker: 11, name: "玄野武宏"}
+    tue: {speaker: 2, name: "四国めたん"}
+    wed: {speaker: 30, name: "No.7"}
+    thu: {speaker: 13, name: "青山龍星"}
+    fri: {speaker: 14, name: "冥鳴ひまり"}
+  default_voice: {speaker: 3, name: "ずんだもん"}
+  line_gap_sec: 0.35
+
+video:
+  width: 1920
+  height: 1080
+  fps: 30
+  encoder: h264_videotoolbox           # 使えなければ libx264 に自動フォールバック
+  bitrate: "6M"
+  bgm: assets/bgm.mp3                  # なければ BGM なし
+  bgm_volume_db: -20
+  font: "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc"
+  font_regular: "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"
+  font_heavy: "/System/Library/Fonts/ヒラギノ角ゴシック W9.ttc"   # サムネイル用
+  animation_seconds: 2.5
+  animation_fps: 24
+
+channel:
+  name: "きょうの日本株"
+  handle: "@JapanStocksToday"
+  default_tags: ["日本株", "適時開示", "EDINET", "大量保有報告書", "臨時報告書", "公開買付", "ドル円", "長期金利",
+                 "国債金利", "新NISA", "きょうの日本株"]
+  disclaimer: "本動画は公開データに基づく情報提供であり、投資助言ではありません。投資判断はご自身の責任で行ってください。"
+  data_credits:
+    - "開示書類: EDINET (金融庁)"
+    - "為替: 日本銀行 時系列統計データ"
+    - "国債金利: 財務省 国債金利情報"
+
+# VOICEVOX ユーザー辞書 (起動時に登録。表記: 読み(カタカナ))
+user_dict:
+  "EDINET": エディネット
+  "TOB": ティーオービー
+  "ドル円": ドルエン
+  "大量保有報告書": タイリョウホユウホウコクショ
+  "臨時報告書": リンジホウコクショ
+  "公開買付": コウカイカイツケ
+
+# 読み上げ用の置き換え (字幕はそのまま。VOICEVOX に渡す文だけ置き換える)
+tts_replacements:
+  "行って": "おこなって"
+  "行い": "おこない"
+  "行われ": "おこなわれ"
+
+upload:
+  client_secret: secrets/client_secret.json   # Google Cloud の OAuth クライアント (デスクトップアプリ)
+  token: secrets/youtube_token.json            # 初回認証で作られる。git には入れない
+  privacy: private                             # 人が台本・動画を確認してから Studio で公開する
+  category_id: "25"                            # ニュースと政治
+  publish_at: null                             # 予約公開しない ("16:45" のように書くと JST のその時刻に予約公開する)
+
+daily:
+  lock_file: output/.lock
+  keep_intermediate_days: 7                    # wav / png / frames を残す日数 (mp4 と json は残す)
+  keep_log_days: 30

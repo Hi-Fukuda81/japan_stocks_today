@@ -1,9 +1,25 @@
 # 秘密情報
 .env
 .env.*
+!.env.example
+secrets/
 client_secret*.json
 token*.json
 credentials*.json
+
+# 生成物
+output/
+logs/
+tmp/
+data/edinet_codes.csv
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
 
 # macOS
 .DS_Store

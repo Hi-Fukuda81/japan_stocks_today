@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(output/**)",
+      "Read(.claude/skills/evening-disclosure-script/**)",
+      "Skill(evening-disclosure-script)",
+      "Edit(output/**)",
+      "Bash(uv run python .claude/skills/evening-disclosure-script/scripts/validate.py:*)"
+    ],
+    "deny": [
+      "WebFetch",
+      "WebSearch",
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  }
+}
