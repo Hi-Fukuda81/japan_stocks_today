@@ -18,12 +18,12 @@
         "by_type": {"type": "array", "minItems": 1,
                     "items": {"type": "object", "required": ["code", "name", "count"]}},
         "large_holdings": {
-          "type": "object", "required": ["count", "listed_count", "listed_new_count", "listed_change_count", "top_issuers", "items"],
+          "type": "object", "required": ["count", "listed_count", "listed_new_count", "listed_change_count", "detail_count", "top_issuers", "items"],
           "properties": {"items": {"type": "array", "items": {
-            "type": "object", "required": ["issuer", "sec_code", "kind", "filer"]}}}
+            "type": "object", "required": ["issuer", "sec_code", "kind", "filer", "ratio_pct", "prev_ratio_pct", "change_pt", "direction"]}}}
         },
         "extraordinary": {
-          "type": "object", "required": ["count", "listed_count", "items"],
+          "type": "object", "required": ["count", "listed_count", "by_reason", "items"],
           "properties": {"items": {"type": "array", "items": {
             "type": "object", "required": ["filer", "sec_code", "reasons"]}}}
         },

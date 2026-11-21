@@ -4,9 +4,9 @@ from __future__ import annotations
 
 SCENE_LABELS = {
     "01_opening": "オープニング",
-    "02_overview": "提出書類の内訳",
+    "02_tender": "公開買付（TOB）",
     "03_holdings": "大量保有報告書",
-    "04_events": "公開買付・臨時報告書",
+    "04_events": "臨時報告書",
     "05_usdjpy": "ドル円",
     "06_jgb": "国債金利",
     "07_ending": "まとめ",

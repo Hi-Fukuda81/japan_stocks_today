@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter
+
+from src.data import holdings
 
 # EDINET の書類種別コード (docTypeCode)
 DOC_TYPES = {
@@ -35,9 +38,11 @@ REFERENCE = {"large_holding_threshold_pct": 5, "change_report_threshold_pct": 1}
 
 
 def short_name(name: str) -> str:
-    """「株式会社」などを外した読み上げ・表示用の社名。"""
-    cleaned = re.sub(r"(株式会社|有限会社|合同会社|\(株\)|（株）)", "", name or "")
-    return re.sub(r"[\s　]+", "", cleaned) or (name or "")
+    """「株式会社」などを外した読み上げ・表示用の社名。全角の英数字は半角にし、英単語の間の空白だけ残す。"""
+    text = unicodedata.normalize("NFKC", name or "")
+    cleaned = re.sub(r"(株式会社|有限会社|合同会社|\(株\))", "", text).strip()
+    cleaned = re.sub(r"(?<![!-~])\s+|\s+(?![!-~])", "", cleaned)
+    return re.sub(r"\s+", " ", cleaned) or (name or "")
 
 
 def sec_code4(code: str | None) -> str | None:
@@ -83,20 +88,35 @@ def _company(codes: dict[str, dict], edinet_code: str | None) -> dict | None:
     return {"name": short_name(row["name"]), "sec_code": code} if code else None
 
 
-def build_large_holdings(docs: list[dict], codes: dict[str, dict], max_items: int) -> dict:
-    """大量保有報告書・変更報告書。一覧は発行会社が上場会社のものだけ。"""
-    rows = [d for d in docs if d["docTypeCode"] == LARGE_HOLDING]
+def _listed_holdings(docs: list[dict], codes: dict[str, dict]) -> list[dict]:
+    """発行会社が上場会社の大量保有報告書・変更報告書 (訂正報告書は含まない)。"""
     items = []
-    for d in rows:
-        issuer = _company(codes, d.get("issuerEdinetCode"))
+    for d in docs:
+        issuer = _company(codes, d.get("issuerEdinetCode")) if d["docTypeCode"] == LARGE_HOLDING else None
         if issuer is None:
             continue
         kind = "変更報告書" if "変更報告書" in (d.get("docDescription") or "") else "大量保有報告書"
         items.append({"issuer": issuer["name"], "sec_code": issuer["sec_code"], "kind": kind,
                       "filer": short_name(d.get("filerName") or ""), "date": submitted_date(d),
-                      "submitted_at": submitted_time(d)})
-    # 新規の大量保有報告書を先に、同じ種類の中では提出の早い順
-    items = sorted(items, key=lambda x: (x["kind"] != "大量保有報告書", x["date"], x["submitted_at"]))
+                      "submitted_at": submitted_time(d), "doc_id": d.get("docID")})
+    return items
+
+
+def holding_doc_ids(docs: list[dict], codes: dict[str, dict], days: list[str]) -> list[str]:
+    """保有割合を読むために本文を取りに行く書類の ID。"""
+    active = [d for d in active_documents(docs) if submitted_date(d) in days]
+    return [x["doc_id"] for x in _listed_holdings(active, codes) if x["doc_id"]]
+
+
+def build_large_holdings(docs: list[dict], codes: dict[str, dict], max_items: int,
+                         details: dict[str, dict] | None = None) -> dict:
+    """大量保有報告書・変更報告書。一覧は発行会社が上場会社のものだけ。
+
+    details は {書類ID: holdings.parse_holding の結果}。一覧は保有割合の動きが大きいものを選ぶ。
+    """
+    rows = [d for d in docs if d["docTypeCode"] == LARGE_HOLDING]
+    details = details or {}
+    items = [holdings.with_detail(x, details.get(x["doc_id"])) for x in _listed_holdings(docs, codes)]
     per_issuer = Counter((x["issuer"], x["sec_code"]) for x in items)
     # 期間中に2件以上の報告が出た発行会社 (週間まとめで使う)
     top_issuers = [{"issuer": name, "sec_code": code, "count": n}
@@ -107,12 +127,23 @@ def build_large_holdings(docs: list[dict], codes: dict[str, dict], max_items: in
         "listed_new_count": sum(1 for x in items if x["kind"] == "大量保有報告書"),
         "listed_change_count": sum(1 for x in items if x["kind"] == "変更報告書"),
         "listed_count": len(items),
-        "items": items[:max_items],
+        "detail_count": sum(1 for x in items if x["ratio_pct"] is not None),
+        "items": holdings.notable(items, max_items),
     }
 
 
+# 一覧で先に出す提出事由 (会社の支配や経営に関わるものを優先する)
+REASON_PRIORITY = ("代表取締役の異動", "主要株主の異動", "親会社または特定子会社の異動", "監査法人の異動",
+                   "子会社取得", "吸収合併", "株式交換")
+
+
+def _reason_rank(labels: list[str]) -> int:
+    ranks = [REASON_PRIORITY.index(x) for x in labels if x in REASON_PRIORITY]
+    return min(ranks) if ranks else len(REASON_PRIORITY)
+
+
 def build_extraordinary(docs: list[dict], max_items: int) -> dict:
-    """臨時報告書。一覧は提出者が上場会社で、提出事由がわかるものだけ。"""
+    """臨時報告書。一覧は提出者が上場会社で、提出事由がわかるものだけ。支配や経営に関わる事由を先に出す。"""
     rows = [d for d in docs if d["docTypeCode"] == EXTRAORDINARY]
     items = []
     for d in rows:
@@ -120,23 +151,33 @@ def build_extraordinary(docs: list[dict], max_items: int) -> dict:
         if code and labels:
             items.append({"filer": short_name(d.get("filerName") or ""), "sec_code": code, "reasons": labels,
                           "date": submitted_date(d), "submitted_at": submitted_time(d)})
+    by_reason = Counter(label for x in items for label in x["reasons"])
+    ranked = sorted(items, key=lambda x: (_reason_rank(x["reasons"]), x["date"], x["submitted_at"]))
+    seen: set[str] = set()
+    unique = [x for x in ranked if not (x["sec_code"] in seen or seen.add(x["sec_code"]))]  # 1社1件
     return {"count": len(rows), "listed_count": sum(1 for d in rows if sec_code4(d.get("secCode"))),
-            "items": sorted(items, key=lambda x: (x["date"], x["submitted_at"]))[:max_items]}
+            "by_reason": [{"reason": r, "count": n} for r, n in sorted(by_reason.items(), key=lambda kv: (-kv[1], kv[0]))],
+            "items": unique[:max_items]}
 
 
 def build_tender_offers(docs: list[dict], codes: dict[str, dict]) -> dict:
+    """公開買付届出書。買付者と対象会社が同じなら自己株式の公開買付。"""
     rows = [d for d in docs if d["docTypeCode"] == TENDER_OFFER]
     items = []
     for d in rows:
         target = _company(codes, d.get("subjectEdinetCode"))
-        items.append({"filer": short_name(d.get("filerName") or ""), "date": submitted_date(d),
+        filer = short_name(d.get("filerName") or "")
+        items.append({"filer": filer, "date": submitted_date(d),
                       "target": target["name"] if target else None,
-                      "sec_code": target["sec_code"] if target else None})
-    return {"count": len(rows), "items": items}
+                      "sec_code": target["sec_code"] if target else None,
+                      "self_tender": bool(target) and (d.get("edinetCode") == d.get("subjectEdinetCode")
+                                                       or filer == target["name"])})
+    self_count = sum(1 for x in items if x["self_tender"])
+    return {"count": len(rows), "self_count": self_count, "other_count": len(items) - self_count, "items": items}
 
 
 def build_filings(docs: list[dict], codes: dict[str, dict], days: list[str], top_types: int,
-                  max_items: int) -> dict:
+                  max_items: int, holding_details: dict[str, dict] | None = None) -> dict:
     """days は対象の提出日 (夕方便は1日、週間まとめはその週の営業日)。"""
     # 一覧には、その日に取下げや修正の操作があった別の日の書類も混ざるので、提出日でも絞る
     active = [d for d in active_documents(docs) if submitted_date(d) in days]
@@ -146,7 +187,7 @@ def build_filings(docs: list[dict], codes: dict[str, dict], days: list[str], top
         "total": len(active),
         "daily": [{"date": day, "total": per_day.get(day, 0)} for day in days],
         "by_type": count_by_type(active, top_types),
-        "large_holdings": build_large_holdings(active, codes, max_items),
+        "large_holdings": build_large_holdings(active, codes, max_items, holding_details),
         "extraordinary": build_extraordinary(active, max_items),
         "tender_offers": build_tender_offers(active, codes),
         "buybacks": {"count": sum(1 for d in active if d["docTypeCode"] == BUYBACK)},

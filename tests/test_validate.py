@@ -38,14 +38,14 @@ def test_ng_words_loaded_from_markdown(validate_mod):
     "10年は2.9%でした。",                       # 2.841 は 2.8
     "前の日から0.016ポイント上昇しました。",    # 30年は -0.016 (向きが違う)
     "前の日から83銭の円高です。",               # 実際は円安
-    "保有割合が10%を超えました。",              # 制度の基準値 (reference) にない
+    "保有割合が20%を超えました。",              # 制度の基準値 (reference) にない
     "ドル円は5%の円安でした。",                 # 前日比は 0.52% (制度の基準値 5% と混同しない)
     "保有割合が3%上昇しました。",
     "10年は2%上昇しました。",                   # 利回りの水準を前日比として言っている
     "10年は0.001ポイント下がりました。",        # 実際は上昇
 ])
 def test_unknown_number_detected(validate_mod, example_script, example_data, line):
-    issues, _ = run(validate_mod, with_line(example_script, "02_overview", line), example_data)
+    issues, _ = run(validate_mod, with_line(example_script, "02_tender", line), example_data)
     assert any("data.json にありません" in i for i in issues)
 
 
@@ -61,7 +61,7 @@ def test_unknown_number_detected(validate_mod, example_script, example_data, lin
     "過去30日の安値は156円91銭でした。",
 ])
 def test_known_numbers_accepted(validate_mod, example_script, example_data, line):
-    issues, _ = run(validate_mod, with_line(example_script, "02_overview", line), example_data)
+    issues, _ = run(validate_mod, with_line(example_script, "02_tender", line), example_data)
     assert issues == []
 
 

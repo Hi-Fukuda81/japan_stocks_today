@@ -18,7 +18,7 @@ NG_WORDS_MD = SKILL_DIR / "references" / "ng_words.md"
 
 SCENES = [
     ("01_opening", "title"),
-    ("02_overview", "filings_bar"),
+    ("02_tender", "tender_offers"),
     ("03_holdings", "holdings_table"),
     ("04_events", "events_list"),
     ("05_usdjpy", "usdjpy_line"),
@@ -38,8 +38,8 @@ NUMBER_TOKEN = re.compile(
     r"(?:円(?P<sen>[0-9]{1,2})銭"
     r"|(?P<frac>\.[0-9]+)?(?:万(?P<man>[0-9]{1,4})?)?\s*(?P<unit>%|％|パーセント|ポイント|円|銭|件))"
 )
-UP_WORDS = ("上昇", "上がり", "上げ", "円安", "ドル高")
-DOWN_WORDS = ("低下", "下落", "下がり", "下げ", "円高", "ドル安")
+UP_WORDS = ("上昇", "上がり", "上げ", "円安", "ドル高", "増加", "増え", "増やし")
+DOWN_WORDS = ("低下", "下落", "下がり", "下げ", "円高", "ドル安", "減少", "減り", "減らし")
 LEVEL_MARKERS = ("に", "まで", "へ")  # 「2.84%に上昇」のように、数値が前日比ではなく水準であることを示す語
 # data.json と照合できない書き方の数値 (照合できる単位は NUMBER_TOKEN のものだけ)
 UNCHECKED_NUMBER = re.compile(r"[0-9][0-9,.]*\s*(?:億|兆|千|社|銘柄|倍|割|ドル|bp|ｂｐ|ベーシスポイント)")
@@ -78,7 +78,7 @@ UNIT_FILTERS = {
     # 単位ごとに照合してよい data.json のフィールドを絞る
     "%": _is_pct,
     "円": lambda p: p[:1] == ("usdjpy",) and not _is_pct(p) and "history" not in p,
-    "ポイント": lambda p: p[:1] == ("jgb",) and p[-1] == "change_pt",
+    "ポイント": lambda p: p[-1] == "change_pt",  # 国債金利の変化と、保有割合の変化
     "件": lambda p: p[:1] == ("filings",),
 }
 UNIT_ALIASES = {"％": "%", "パーセント": "%", "銭": "円"}

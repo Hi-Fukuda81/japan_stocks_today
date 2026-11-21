@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # progress (0〜1) を受け取ってアニメーションできる描画関数。キーは台本スキルと取り決めた visual ID
 ANIMATED = {
-    "filings_bar": charts.filings_bar,
+    "tender_offers": charts.tender_offers,
     "holdings_table": charts.holdings_table,
     "usdjpy_line": charts.usdjpy_line,
     "jgb_yields": charts.jgb_yields,

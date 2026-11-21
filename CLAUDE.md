@@ -10,10 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 現状
 
 - 夕方便（大引け後の開示まとめ）と土曜の週間まとめの fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
-- 架空の提出書類（社名と件数は架空、ドル円と国債金利は実データ）で、夕方便と週間まとめの tts → video までは実際に動かした。
-- **実データでの通し実行はまだ。** `EDINET_API_KEY` が未設定のため fetch を実際の EDINET に対して動かしていない。`claude -p` での台本生成、YouTube への投稿も未実行。
+- 実データ（2026-11-16〜11-20 の週間まとめ）で fetch → tts → visual → video を動かした（`tmp/real/`）。そのときの台本は手書きで、`claude -p` での台本生成と YouTube への投稿は未実行。夕方便は実データでまだ動かしていない。
 - launchd は未登録（`scripts/install_launchd.sh install` を実行していない）。まず手動で1本を最後まで作ってから登録する。
-- 未実装: 朝便（月〜金の朝）、TDnet・JPX のデータ、大量保有報告書の保有割合（書類本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
+- 未実装: 朝便（月〜金の朝）、TDnet・JPX のデータ、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
 
 次のことは勝手に決めず、ユーザーに確認する: YouTube チャンネルと OAuth クライアントの使い方、公開のしかた（予約公開にするか）、VOICEVOX の声の割り当て、新しいデータソースの追加。
 
@@ -28,8 +27,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 便 | 公開時刻（JST） | 内容 | 状態 |
 |---|---|---|---|
 | 朝便（月〜金） | 8:00ごろ（寄り付き前） | 前日15時以降の開示・決算のまとめ、今日の決算発表予定、朝の為替 | 未実装 |
-| 夕方便（月〜金） | 16:00〜17:00（大引け後） | 当日の EDINET 提出書類、直近のドル円・国債金利 | 実装済み |
-| 週間まとめ（土） | 土曜の朝（launchd は 9:00） | その週（月〜金）の EDINET 提出書類の合計、ドル円・国債金利の前週末比 | 実装済み |
+| 夕方便（月〜金） | 16:00〜17:00（大引け後） | 当日の公開買付・大量保有報告書（保有割合の動き）・臨時報告書、直近のドル円・国債金利 | 実装済み |
+| 週間まとめ（土） | 土曜の朝（launchd は 9:00） | その週（月〜金）の公開買付・大量保有報告書・臨時報告書、ドル円・国債金利の前週末比 | 実装済み |
 
 ## コマンド
 
@@ -83,6 +82,7 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 | 用途 | ソース | モジュール | 備考 |
 |---|---|---|---|
 | 提出書類の一覧（大量保有・臨時報告書・公開買付など） | EDINET API v2 | `src/data/edinet.py` | 無料。API キーが必要 |
+| 大量保有報告書の保有割合・保有目的 | EDINET API v2（書類本文の CSV、`type=5`） | `src/data/edinet.py`、`src/data/holdings.py` | 上場会社についての報告を1件ずつ取得する（週間で約400件、2分ほど） |
 | 提出者名・証券コード | EDINET コード一覧（zip） | 同上 | `data/edinet_codes.csv` にキャッシュ（30日で更新、git 管理外） |
 | ドル円（東京市場 17時時点） | 日銀 時系列統計データ検索サイト API | `src/data/boj.py` | 系列 `FXERD04` |
 | 国債金利 | 財務省 国債金利情報 CSV | `src/data/mof.py` | 今月分で足りなければ全期間の CSV も読む。和暦の日付 |
@@ -91,8 +91,13 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 
 - `src/data/build.py` は取得した生データから data.json の各節を組み立てる純粋関数だけを置く。通信は各ソースのモジュールに閉じる。
 - ドル円と国債金利は公表が遅れるので、夕方の時点では前営業日以前の値になる。data.json の `usdjpy.date`・`jgb.date` と `notes` に実際の日付が入り、台本も図もその日付を言う。
+- **主役は「どの会社で何が変わったか」。件数は主役にしない**（ユーザーの指示。件数を並べた試作は「誰も見ない」と却下された）。タイトル画面・サムネイル・台本の書き出しは、保有割合がいちばん大きく動いた会社にする。
 - 大量保有・臨時報告書の一覧（`items`）は上場会社に関するものだけ。件数（`count`）は全体。
-- 臨時報告書の提出事由は、開示府令19条2項の号を `build.REPORT_REASONS` で日本語にしている。確実な号だけを載せ、表にない号の書類は一覧に出さない。
+- 大量保有の `items` は、同じ提出者・発行会社なら最新の1件にしたうえで、新規（保有割合の大きい順）・増加・減少（動いた幅の大きい順）から順番に取る（`holdings.notable`）。保有割合は提出者と共同保有者の合計で、新株予約権などの潜在株式を含む。
+- 臨時報告書の `items` は1社1件で、代表取締役・主要株主・親会社の異動などを先に出す（`build.REASON_PRIORITY`）。
+- 公開買付は、買付者と対象会社が同じなら自社株の買付（`self_tender`）。
+- 社名は `build.short_name` で「株式会社」を外し、全角の英数字を半角にしている。英字の社名を VOICEVOX が1文字ずつ読むときは `tts_replacements` に足す。
+- 臨時報告書の提出事由は、開示府令19条2項の号を `build.REPORT_REASONS` で日本語にしている。表にない号の書類は一覧に出さない。対応表は書類の本文とは突き合わせていない。
 - `data.reference` は制度上の基準値（大量保有報告書の5%など）。台本で制度を説明するときの数値も照合対象にするために data.json に入れている。
 - 営業日判定は `src/data/calendar_jp.py`（`jpholiday` + 年末年始）。
 
@@ -100,7 +105,7 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 
 夕方便と同じ data.json の形・シーン構成・validate・図表を使い、対象期間だけが違う（`edition: "weekly"`、`period.days` がその週の営業日）。
 
-- 提出書類は営業日ごとに EDINET を呼んで合算する。`filings.daily` に日ごとの件数、`large_holdings.top_issuers` に期間中2件以上の報告が出た上場会社が入る（夕方便でも同じキーがあるが、中身は1日分）。
+- 提出書類は営業日ごとに EDINET を呼んで合算する。`large_holdings.items` はその週で保有割合の動きが大きかったもの、`top_issuers` は期間中2件以上の報告が出た上場会社（夕方便でも同じキーがあるが、中身は1日分）。
 - ドル円・国債金利の `change` は、週の初日より前でいちばん新しい値（前週末）との差。図の表記は `theme.change_word` で「前週末比」に切り替わる。
 - 日銀・財務省の公表は遅いので、土曜の朝の時点では週の後半の値がまだない。`notes` と図にデータの日付が出る。その週の値が1日分もなければ fetch は失敗する。
 - 台本の言い方の違いはスキルの SKILL.md「週間まとめ」にある。
@@ -113,9 +118,9 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 
 ### シーン構成は固定
 
-`01_opening → 02_overview → 03_holdings → 04_events → 05_usdjpy → 06_jgb → 07_ending`
+`01_opening → 02_tender（公開買付）→ 03_holdings（大量保有）→ 04_events（臨時報告書）→ 05_usdjpy → 06_jgb → 07_ending`
 
-シーン ID と visual ID（`title` / `filings_bar` / `holdings_table` / `events_list` / `usdjpy_line` / `jgb_yields` / `ending`）は、スキルの `script_schema.json`、`validate.py` の `SCENES`、`src/visuals/render.py` の描画関数の対応、`src/upload/description.py` の目次ラベルが共有している。変えるときは4か所を揃える。
+シーン ID と visual ID（`title` / `tender_offers` / `holdings_table` / `events_list` / `usdjpy_line` / `jgb_yields` / `ending`）は、スキルの `script_schema.json`、`validate.py` の `SCENES`、`src/visuals/render.py` の描画関数の対応、`src/upload/description.py` の目次ラベルが共有している。変えるときは4か所を揃える。
 
 ### 決定的な Python と Claude Code の役割分担
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from src.config import load_config
+from src.visuals import slides
 
 W, H = 1280, 720
 BG, BLACK, WHITE, YELLOW, TAG = (8, 8, 10), (0, 0, 0), (255, 255, 255), (255, 214, 0), (200, 30, 45)
@@ -26,11 +27,12 @@ def _fit(draw, text: str, font_path: str, size: int, max_w: float) -> ImageFont.
 
 
 def headline(data: dict) -> tuple[str, str]:
-    """(大きい見出し, 補足)。公開買付があればそれを、なければ大量保有の件数を主役にする。"""
+    """(大きい見出し, 補足)。保有割合がいちばん大きく動いた会社を主役にする。なければ公開買付の件数。"""
+    topics = slides.headline_topics(data, 1)
+    if topics:
+        return topics[0]
     f = data["filings"]
-    if f["tender_offers"]["count"]:
-        return f"公開買付 {f['tender_offers']['count']}件", f"大量保有 {f['large_holdings']['count']}件"
-    return f"大量保有 {f['large_holdings']['count']}件", f"提出書類 {f['total']:,}件"
+    return f"公開買付 {f['tender_offers']['count']}件", f"大量保有 {f['large_holdings']['count']}件"
 
 
 def _md(iso: str) -> str:

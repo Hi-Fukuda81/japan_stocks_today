@@ -16,8 +16,8 @@
         "required": ["id", "visual", "lines"],
         "additionalProperties": false,
         "properties": {
-          "id": {"enum": ["01_opening", "02_overview", "03_holdings", "04_events", "05_usdjpy", "06_jgb", "07_ending"]},
-          "visual": {"enum": ["title", "filings_bar", "holdings_table", "events_list", "usdjpy_line", "jgb_yields", "ending"]},
+          "id": {"enum": ["01_opening", "02_tender", "03_holdings", "04_events", "05_usdjpy", "06_jgb", "07_ending"]},
+          "visual": {"enum": ["title", "tender_offers", "holdings_table", "events_list", "usdjpy_line", "jgb_yields", "ending"]},
           "lines": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1, "maxLength": 45}}
         }
       }
@@ -25,7 +25,7 @@
   },
   "x-scene-order": [
     ["01_opening", "title"],
-    ["02_overview", "filings_bar"],
+    ["02_tender", "tender_offers"],
     ["03_holdings", "holdings_table"],
     ["04_events", "events_list"],
     ["05_usdjpy", "usdjpy_line"],

@@ -16,7 +16,7 @@ def test_render_all_scenes(monkeypatch, day_dir):
     assert len(outputs) == 7
     assert all(Image.open(p).size == (1920, 1080) for p in outputs)
     assert Image.open(day_dir / "thumbnail.png").size == (1280, 720)
-    for scene in ("02_overview", "03_holdings", "05_usdjpy", "06_jgb"):
+    for scene in ("02_tender", "03_holdings", "05_usdjpy", "06_jgb"):
         assert len(list((day_dir / "img" / f"{scene}_anim").glob("*.png"))) == 2
     assert not (day_dir / "img" / "04_events_anim").exists()
 
@@ -34,17 +34,33 @@ def test_render_with_no_listed_items(monkeypatch, day_dir, example_data, tmp_pat
     assert slides.event_rows(empty) == []
 
 
-def test_event_rows_put_tender_offers_first(example_data):
+def test_event_rows_are_extraordinary_reports_only(example_data):
     rows = slides.event_rows(example_data)
-    assert rows[0] == ("公開買付", "テスト精密工業 (9903)", "買付者: 例示ホールディングス")
-    assert rows[1][0] == "臨時報告書" and rows[1][2] == "代表取締役の異動"
+    assert rows[0] == ("臨時報告書", "サンプル電機 (9901)", "代表取締役の異動")
+    assert all(kind == "臨時報告書" for kind, _, _ in rows)
+
+
+def test_headline_topics_put_ratio_moves_first(example_data):
+    assert slides.headline_topics(example_data) == [("例示ロジスティクス", "9.84%→8.02%"), ("架空ケミカル", "5.63%→4.41%"),
+                                                    ("見本フーズ", "6.21%→7.35%")]
+    assert slides.ratio_move({"ratio_pct": 5.12, "prev_ratio_pct": None, "direction": "新規"}) == "新規 5.12%"
+    assert slides.ratio_move({"ratio_pct": 5.12, "prev_ratio_pct": None, "direction": None}) == "5.12%"
+    assert slides.ratio_move({"ratio_pct": None}) == ""
 
 
 def test_thumbnail_headline(example_data):
-    assert thumbnail.headline(example_data) == ("公開買付 1件", "大量保有 35件")
+    assert thumbnail.headline(example_data) == ("例示ロジスティクス", "9.84%→8.02%")
     f = example_data["filings"]
-    no_tob = {**example_data, "filings": {**f, "tender_offers": {"count": 0, "items": []}}}
-    assert thumbnail.headline(no_tob) == ("大量保有 35件", "提出書類 424件")
+    unread = {**example_data, "filings": {**f, "large_holdings": {**f["large_holdings"], "items": []}}}
+    assert thumbnail.headline(unread) == ("公開買付 1件", "大量保有 35件")
+
+
+def test_tender_offers_chart_handles_empty(example_data, tmp_path):
+    from src.visuals import charts
+    f = example_data["filings"]
+    charts.tender_offers(example_data, tmp_path / "t.png", progress=0.5)
+    charts.tender_offers({**example_data, "filings": {**f, "tender_offers": {"count": 0, "items": []}}}, tmp_path / "t0.png")
+    assert (tmp_path / "t.png").exists() and (tmp_path / "t0.png").exists()
 
 
 def test_weekly_labels(example_data):

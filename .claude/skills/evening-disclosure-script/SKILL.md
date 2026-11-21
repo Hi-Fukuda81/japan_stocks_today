@@ -14,7 +14,7 @@ description: 「きょうの日本株」夕方便と土曜の週間まとめの�
 2. このスキルの `references/style_guide.md`、`references/ng_words.md`、`references/script_schema.json` を読む。
 3. `examples/` の見本を1つ読み、構成と文体を合わせる(数値・社名は見本ではなく data.json から取る)。
 4. 台本を作成する。シーン構成は固定:
-   01_opening → 02_overview → 03_holdings → 04_events → 05_usdjpy → 06_jgb → 07_ending
+   01_opening → 02_tender → 03_holdings → 04_events → 05_usdjpy → 06_jgb → 07_ending
 5. `output/<日付>/script.json` に書き出す(UTF-8、`script_schema.json` 準拠)。
 6. `uv run python .claude/skills/evening-disclosure-script/scripts/validate.py output/<日付>` を実行する。
 7. NG があれば指摘箇所だけを直し、6 に戻る(最大3回)。3回で通らなければ、最後の NG 一覧と理由を `output/<日付>/script_error.txt` に書き、script.json は削除せずに終了する。
@@ -24,11 +24,22 @@ description: 「きょうの日本株」夕方便と土曜の週間まとめの�
 土曜に出す「今週のまとめ」。シーン構成・ルールは夕方便と同じで、対象の期間と言い方だけ変える。
 - 対象は `period.start` から `period.end` の1週間(`period.days` が営業日)。件数はすべてこの期間の合計。
 - 「きょうの」と言わず「今週の」「この1週間で」と言う。01_opening は「11月16日から11月20日の週間まとめです」のように期間を言う。
-- 02_overview: 週の合計に加えて、`filings.daily` から提出の多かった日・少なかった日に触れてよい。
-- 03_holdings: `large_holdings.top_issuers`(期間中に2件以上の報告が出た上場会社)があれば、それを中心に話す。なければ `items` から。
+- 02_tender: その週の公開買付をすべて挙げる。
+- 03_holdings: `items` はその週で保有割合の動きが大きかったもの。`large_holdings.top_issuers`(期間中に2件以上の報告が出た上場会社)にも触れてよい。
 - 05_usdjpy / 06_jgb: `change` / `change_pt` は前週末(`prev_date`)からの変化。「前の週末から」「この1週間で」と言い、「前日比」とは言わない。
 - title: 「きょうの日本株【週間まとめ】11/16〜11/20 大量保有報告書 180件｜公開買付・臨時報告書」のように、必ず「きょうの日本株【週間まとめ】開始日〜終了日」で始める。
 - 07_ending: 「来週もよろしくお願いします」など週末向けの締めにする。
+
+## 何を主役にするか (最重要)
+
+視聴者が知りたいのは「どの会社で、何が変わったか」。書類の件数は主役にしない(件数だけを並べたセリフは、シーンごとに1つまで)。
+
+- 02_tender (`filings.tender_offers`): 誰が、どの会社に公開買付を届け出たか。`self_tender` が true なら会社が自社の株を買い付けるもの。件数は `count` / `other_count`(他社から) / `self_count`(自社株)。
+- 03_holdings (`filings.large_holdings.items`): 誰が、どの会社の株を、何%から何%にしたか(`prev_ratio_pct` → `ratio_pct`、差は `change_pt` ポイント、`direction` は 新規/増加/減少)。`purpose`(保有目的)に経営への関与や非公開化が書かれていれば触れる。動きの大きいものから3〜5件を取り上げ、それが何を意味するかを添える。
+- 04_events (`filings.extraordinary`): どの会社が何を報告したか(`items`)。`by_reason` は上場会社の提出事由ごとの件数。
+- 同じ会社が複数のシーンに出てくるとき(公開買付と大量保有、大量保有と主要株主の異動など)は、つながりに触れる。
+- 01_opening と title は、その日いちばん大きな動き(会社名と保有割合、公開買付の対象)で始める。
+- 英字の社名は data.json の表記のまま書く。
 
 ## 絶対ルール
 - 数値・社名・日付は data.json にあるものだけを使う。計算・推測・記憶から数字を出さない。

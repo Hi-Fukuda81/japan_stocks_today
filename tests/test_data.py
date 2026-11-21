@@ -80,8 +80,9 @@ def test_large_holdings_lists_only_listed_issuers_new_first():
     ]
     h = build.build_large_holdings(docs, CODES, max_items=1)
     assert (h["count"], h["listed_count"], h["listed_new_count"], h["listed_change_count"]) == (4, 2, 1, 1)
-    assert h["items"] == [{"issuer": "アルファ", "sec_code": "1111", "kind": "大量保有報告書",
-                           "filer": "新規ファンド", "date": "2026-11-13", "submitted_at": "10:00"}]
+    item = h["items"][0]
+    assert (item["issuer"], item["sec_code"], item["kind"], item["filer"]) == ("アルファ", "1111", "大量保有報告書", "新規ファンド")
+    assert item["ratio_pct"] is None and item["direction"] is None and h["detail_count"] == 0
     assert h["top_issuers"] == [{"issuer": "アルファ", "sec_code": "1111", "count": 2}]
 
 
@@ -99,7 +100,8 @@ def test_tender_offers_resolve_target():
     t = build.build_tender_offers([doc("240", "買付者株式会社", subjectEdinetCode="E1"),
                                    doc("240", "買付者2", subjectEdinetCode="E2")], CODES)
     assert t["count"] == 2
-    assert t["items"][0] == {"filer": "買付者", "date": "2026-11-13", "target": "アルファ", "sec_code": "1111"}
+    assert t["items"][0] == {"filer": "買付者", "date": "2026-11-13", "target": "アルファ", "sec_code": "1111",
+                             "self_tender": False}
     assert t["items"][1]["target"] is None
 
 
@@ -311,3 +313,137 @@ def test_fetch_requires_api_key_and_documents(fake_sources, monkeypatch):
     monkeypatch.setattr(fetch_mod, "env", lambda name: None)
     with pytest.raises(RuntimeError, match="EDINET_API_KEY"):
         fetch_mod.fetch("2026-11-13")
+
+
+# --- 大量保有報告書の保有割合 ---
+
+from src.data import holdings  # noqa: E402
+
+TOTAL = "FilingDateInstant"
+MEMBER = "FilingDateInstant_jplvh010000-lvh_E1-000FilerLargeVolumeHolder1Member"
+
+
+def csv_rows(ratio="0.0673", prev="0.0898", context=TOTAL, purpose="純投資  です"):
+    rows = [{"element": holdings.RATIO, "context": context, "value": ratio},
+            {"element": holdings.PREV_RATIO, "context": context, "value": prev},
+            {"element": holdings.PURPOSE, "context": MEMBER, "value": purpose},
+            {"element": holdings.OBLIGATION_DATE, "context": TOTAL, "value": "2026-11-06"}]
+    return rows
+
+
+def test_parse_holding_reads_total_ratio():
+    rows = csv_rows() + [{"element": holdings.RATIO, "context": MEMBER, "value": "0.0499"}]
+    assert holdings.parse_holding(rows) == {"ratio_pct": 6.73, "prev_ratio_pct": 8.98, "purpose": "純投資です",
+                                            "obligation_date": "2026-11-06"}
+
+
+def test_parse_holding_single_filer_has_no_total_context():
+    assert holdings.parse_holding(csv_rows(context=MEMBER, prev="－"))["ratio_pct"] == 6.73
+    assert holdings.parse_holding(csv_rows(context=MEMBER, prev="－"))["prev_ratio_pct"] is None
+
+
+def test_parse_holding_without_ratio_is_none():
+    assert holdings.parse_holding(csv_rows(ratio="－")) is None
+    two = [{"element": holdings.RATIO, "context": MEMBER, "value": "0.03"},
+           {"element": holdings.RATIO, "context": MEMBER + "2", "value": "0.04"}]
+    assert holdings.parse_holding(two) is None  # 提出者ごとの値が複数あるだけでは合計がわからない
+
+
+def held(filer, kind="変更報告書", ratio=6.0, prev=5.0, time="10:00", code="1111"):
+    item = {"issuer": "アルファ", "sec_code": code, "kind": kind, "filer": filer, "date": "2026-11-13",
+            "submitted_at": time, "doc_id": filer}
+    detail = None if ratio is None else {"ratio_pct": ratio, "prev_ratio_pct": prev, "purpose": None,
+                                         "obligation_date": None}
+    return holdings.with_detail(item, detail)
+
+
+def test_with_detail_direction():
+    assert (held("a")["direction"], held("a")["change_pt"]) == ("増加", 1.0)
+    assert (held("a", ratio=3.5, prev=5.0)["direction"], held("a", ratio=3.5, prev=5.0)["change_pt"]) == ("減少", -1.5)
+    assert held("a", ratio=5.0)["direction"] == "変わらず"
+    new = held("a", kind="大量保有報告書", ratio=7.2, prev=None)
+    assert (new["direction"], new["change_pt"], new["prev_ratio_pct"]) == ("新規", None, None)
+    assert held("a", ratio=None)["direction"] is None
+    unknown = held("a", ratio=6.0, prev=None)  # 変更報告書で前回の割合が読めない
+    assert (unknown["direction"], unknown["ratio_pct"]) == (None, 6.0)
+
+
+def test_notable_takes_turns_and_ranks_by_size():
+    items = [held("up_small", ratio=6.0), held("up_big", ratio=20.0), held("down", ratio=1.0, prev=9.0),
+             held("new", kind="大量保有報告書", ratio=5.1, prev=None), held("flat", ratio=5.0),
+             held("unread", ratio=None)]
+    assert [x["filer"] for x in holdings.notable(items, 6)] == ["new", "up_big", "down", "up_small", "flat", "unread"]
+
+
+def test_notable_keeps_latest_per_filer_and_issuer():
+    items = [held("a", ratio=6.0, time="09:00"), held("a", ratio=9.0, time="15:00")]
+    picked = holdings.notable(items, 8)
+    assert len(picked) == 1 and picked[0]["ratio_pct"] == 9.0
+
+
+def test_large_holdings_with_details_and_doc_ids():
+    docs = [doc("350", "ファンド株式会社", issuerEdinetCode="E1", docDescription="変更報告書", docID="S1"),
+            doc("350", "非上場相手", issuerEdinetCode="E2", docDescription="変更報告書", docID="S2")]
+    assert build.holding_doc_ids(docs, CODES, ["2026-11-13"]) == ["S1"]
+    detail = {"ratio_pct": 8.0, "prev_ratio_pct": 5.5, "purpose": "純投資", "obligation_date": "2026-11-10"}
+    h = build.build_large_holdings(docs, CODES, 8, {"S1": detail})
+    assert h["detail_count"] == 1
+    assert (h["items"][0]["direction"], h["items"][0]["change_pt"]) == ("増加", 2.5)
+
+
+def test_extraordinary_puts_control_changes_first_one_per_company():
+    docs = [doc("180", "株式会社ガンマ", "09:00", secCode="33330", currentReportReason="第19条第2項第12号"),
+            doc("180", "株式会社アルファ", "10:00", secCode="11110", currentReportReason="第19条第2項第4号"),
+            doc("180", "株式会社アルファ", "11:00", secCode="11110", currentReportReason="第19条第2項第12号")]
+    e = build.build_extraordinary(docs, max_items=8)
+    assert [x["filer"] for x in e["items"]] == ["アルファ", "ガンマ"]
+    assert e["items"][0]["reasons"] == ["主要株主の異動"]
+    assert e["by_reason"][0] == {"reason": "財政状態や経営成績に著しい影響を与える事象", "count": 2}
+
+
+def test_tender_offer_by_the_company_itself():
+    t = build.build_tender_offers([doc("240", "株式会社アルファ", edinetCode="E1", subjectEdinetCode="E1")], CODES)
+    assert t["items"][0]["self_tender"] is True
+
+
+def test_parse_document_csv_and_fetch(monkeypatch):
+    import io
+    import zipfile
+    text = "要素ID\t項目名\tコンテキストID\t相対年度\t連結・個別\t期間・時点\tユニットID\t単位\t値\n" \
+           f"{holdings.RATIO}\t株券等保有割合\t{TOTAL}\t提出日時点\tその他\t時点\tpure\t\t0.0673\n"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("XBRL_TO_CSV/a.csv", text.encode("utf-16"))
+    assert edinet.parse_document_csv(buf.getvalue()) == [{"element": holdings.RATIO, "context": TOTAL, "value": "0.0673"}]
+    with pytest.raises(edinet.EdinetError):
+        edinet.parse_document_csv(b"not a zip")
+
+    class Res:
+        status_code, headers, content = 200, {"Content-Type": "application/octet-stream"}, buf.getvalue()
+
+    class Http:
+        def get(self, url, params, timeout):
+            assert url.endswith("/S1") and params["type"] == 5
+            return Res()
+
+    assert edinet.fetch_document_csv("key", "S1", Http())[0]["value"] == "0.0673"
+    Res.status_code = 404
+    with pytest.raises(edinet.EdinetError):
+        edinet.fetch_document_csv("key", "S1", Http())
+
+
+def test_fetch_holding_details_skips_unreadable(monkeypatch):
+    def fake(key, doc_id, session):
+        if doc_id == "bad":
+            raise edinet.EdinetError("x")
+        return csv_rows()
+
+    monkeypatch.setattr(fetch_mod.edinet, "fetch_document_csv", fake)
+    details = fetch_mod.fetch_holding_details("key", ["S1", "bad"], 0, sleep=lambda s: None)
+    assert list(details) == ["S1"] and details["S1"]["ratio_pct"] == 6.73
+    asked = ["bad"] * 9
+    assert fetch_mod.fetch_holding_details("key", asked, 0, sleep=lambda s: None) == {}
+    calls = []
+    monkeypatch.setattr(fetch_mod.edinet, "fetch_document_csv", lambda k, d, s: calls.append(d) or fake(k, d, s))
+    fetch_mod.fetch_holding_details("key", asked, 0, sleep=lambda s: None)
+    assert len(calls) == fetch_mod.MAX_DETAIL_FAILURES

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import jsonschema
+import requests
 
 from src.config import REPO_ROOT, DayPaths, env, load_config
-from src.data import boj, build, edinet, mof
+from src.data import boj, build, edinet, holdings, mof
 from src.data.calendar_jp import week_trading_days
 
 log = logging.getLogger(__name__)
@@ -18,11 +20,35 @@ SCHEMA_PATH = Path(__file__).with_name("schema.json")
 LOOKBACK_CALENDAR_DAYS = 75  # 30営業日ぶんの履歴を取るための暦日
 MIN_JGB_ROWS = 8  # 前週末比まで計算できる行数 (今月分で足りなければ全期間の CSV も読む)
 EDITIONS = ("evening", "weekly")
+MAX_DETAIL_FAILURES = 5  # EDINET の障害時に、本文の取得で長時間止まらないようにする
 
 
 def validate_data(data: dict) -> None:
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     jsonschema.validate(data, schema)
+
+
+def fetch_holding_details(api_key: str, doc_ids: list[str], interval: float, sleep=time.sleep) -> dict[str, dict]:
+    """大量保有報告書の本文から保有割合を読む。読めない書類は飛ばす (一覧に出ないだけで、件数には入る)。"""
+    details: dict[str, dict] = {}
+    session = requests.Session()
+    failures = 0
+    for doc_id in doc_ids:
+        try:
+            parsed = holdings.parse_holding(edinet.fetch_document_csv(api_key, doc_id, session))
+            failures = 0
+        except edinet.EdinetError as e:
+            log.warning("%s", e)
+            parsed = None
+            failures += 1
+        if parsed:
+            details = {**details, doc_id: parsed}
+        if failures >= MAX_DETAIL_FAILURES:
+            log.warning("書類の本文の取得が %d 件続けて失敗したので打ち切ります", failures)
+            break
+        sleep(interval)
+    log.info("大量保有報告書の本文を %d / %d 件読みました", len(details), len(doc_ids))
+    return details
 
 
 def fetch_filings(days: list[str], cfg: dict) -> dict:
@@ -31,7 +57,9 @@ def fetch_filings(days: list[str], cfg: dict) -> dict:
         raise RuntimeError("EDINET_API_KEY が設定されていません (.env.example を参照)")
     codes = edinet.load_codes(REPO_ROOT / cfg["codes_csv"], cfg["codes_max_age_days"])
     docs = [doc for day in days for doc in edinet.fetch_documents(api_key, day)]
-    filings = build.build_filings(docs, codes, days, cfg["top_types"], cfg["max_items"])
+    doc_ids = build.holding_doc_ids(docs, codes, days)[: cfg["max_detail_docs"]]
+    details = fetch_holding_details(api_key, doc_ids, cfg["detail_interval_sec"])
+    filings = build.build_filings(docs, codes, days, cfg["top_types"], cfg["max_items"], details)
     if filings["total"] == 0:
         raise RuntimeError(f"{days[0]}〜{days[-1]} に提出された書類が EDINET にありません (休日か、まだ反映されていません)")
     return filings

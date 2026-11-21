@@ -13,7 +13,7 @@ from src.video.subtitles import LEAD_IN_SEC, TAIL_SEC, build_timeline, draw_subt
 LINES = [
     {"scene_id": "01_opening", "text": "a", "wav": "01_01.wav", "duration": 1.0},
     {"scene_id": "01_opening", "text": "b", "wav": "01_02.wav", "duration": 2.0},
-    {"scene_id": "02_overview", "text": "c", "wav": "02_01.wav", "duration": 1.5},
+    {"scene_id": "02_tender", "text": "c", "wav": "02_01.wav", "duration": 1.5},
 ]
 
 
@@ -22,7 +22,7 @@ def test_build_timeline():
     starts = [line["start"] for line in tl["lines"]]
     assert starts == [0.0, LEAD_IN_SEC + 1.5, LEAD_IN_SEC + 1.5 + 2.5]
     assert tl["total"] == pytest.approx(LEAD_IN_SEC + 1.5 + 2.5 + 1.5 + TAIL_SEC)
-    assert [s["scene_id"] for s in tl["scenes"]] == ["01_opening", "02_overview"]
+    assert [s["scene_id"] for s in tl["scenes"]] == ["01_opening", "02_tender"]
     assert sum(line["display"] for line in tl["lines"]) == pytest.approx(tl["total"])
 
 
@@ -93,4 +93,4 @@ def test_build_description(example_script):
     text = build_description(example_script, tl, load_config(), "ずんだもん")
     assert "VOICEVOX:ずんだもん" in text
     assert "投資助言ではありません" in text
-    assert "0:00 オープニング" in text and "提出書類の内訳" in text
+    assert "0:00 オープニング" in text and "公開買付（TOB）" in text

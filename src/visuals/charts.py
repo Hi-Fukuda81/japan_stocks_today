@@ -19,32 +19,49 @@ def _clean_axes(ax) -> None:
         ax.spines[spine].set_visible(False)
 
 
-def filings_bar(data: dict, out: Path, progress: float = 1.0) -> None:
-    f = data["filings"]
-    fig, rect = t.new_figure("EDINET 提出書類の内訳", f"{t.filings_label(data)} / 全 {f['total']:,} 件")
-    rows = list(reversed(f["by_type"]))  # 件数の多いものを上に
-    ax = fig.add_axes([rect[0] + 0.24, rect[1] + 0.02, rect[2] - 0.32, rect[3] - 0.02])
-    top = max(r["count"] for r in rows)
-    ax.set_xlim(0, top * 1.15)
-    ys = list(range(len(rows)))
-    ax.barh(ys, [r["count"] * progress for r in rows], color=t.ACCENT, height=0.62)
-    ax.set_yticks(ys, [_short(r["name"], 14) for r in rows], fontsize=26)
-    for y, r in zip(ys, rows):
-        ax.text(r["count"] * progress + top * 0.015, y, f"{round(r['count'] * progress):,} 件", va="center",
-                fontsize=26, fontweight="bold")
-    ax.tick_params(axis="x", labelsize=16)
-    ax.tick_params(axis="y", length=0)
-    ax.grid(axis="x", color=t.GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    _clean_axes(ax)
+def tender_offers(data: dict, out: Path, progress: float = 1.0) -> None:
+    """公開買付届出書の一覧: 誰が、どの会社の株を買い付けるか。"""
+    offers = data["filings"]["tender_offers"]
+    fig, rect = t.new_figure("公開買付 (TOB) の届出", f"{t.filings_label(data)} / {offers['count']} 件")
+    top = rect[1] + rect[3] - 0.01
+    for x, label in ((0.06, "対象の会社 (証券コード)"), (0.47, "買い付ける側"), (0.80, "区分")):
+        fig.text(x, top, label, fontsize=22, color=t.MUTED, va="center")
+    items = offers["items"][:8]
+    if not items:
+        fig.text(0.5, 0.52, "公開買付の届出はありません", ha="center", fontsize=38, color=t.MUTED)
+    step = min(0.085, (rect[3] - 0.07) / max(len(items), 1))
+    for i, item in enumerate(items):
+        a = t.stagger(progress, i, len(items))
+        if a <= 0:
+            continue
+        y = top - 0.07 - i * step
+        code = f" ({item['sec_code']})" if item.get("sec_code") else ""
+        fig.text(0.06, y, _short(item.get("target") or "(非上場)", 13) + code, fontsize=30, fontweight="bold",
+                 va="center", alpha=a)
+        fig.text(0.47, y, _short(item["filer"], 13), fontsize=28, va="center", alpha=a)
+        own = item.get("self_tender")
+        fig.text(0.80, y, "自社株" if own else "他社から", fontsize=28, fontweight="bold", va="center", alpha=a,
+                 color=t.ACCENT if own else t.WARM)
     t.save(fig, out)
 
 
+DIRECTION_COLORS = {"新規": "WARM", "増加": "WARM", "減少": "ACCENT"}
+
+
+def _ratio_text(item: dict) -> str:
+    if item.get("ratio_pct") is None:
+        return "-"
+    if item.get("prev_ratio_pct") is None:
+        return f"{item['ratio_pct']:.2f}%"
+    return f"{item['prev_ratio_pct']:.2f}% → {item['ratio_pct']:.2f}%"
+
+
 def holdings_table(data: dict, out: Path, progress: float = 1.0) -> None:
+    """大量保有報告書・変更報告書: 誰が、どの会社の株を、何%から何%にしたか。"""
     h = data["filings"]["large_holdings"]
-    fig, rect = t.new_figure("大量保有報告書・変更報告書", f"{t.filings_label(data)} / 全 {h['count']:,} 件")
+    fig, rect = t.new_figure("大量保有報告書・変更報告書", t.filings_label(data))
     top = rect[1] + rect[3] - 0.01
-    for x, label in ((0.06, "発行会社 (証券コード)"), (0.47, "提出者"), (0.82, "種類")):
+    for x, label in ((0.05, "発行会社 (証券コード)"), (0.36, "提出者"), (0.63, "保有割合"), (0.90, "区分")):
         fig.text(x, top, label, fontsize=22, color=t.MUTED, va="center")
     items = h["items"]
     if not items:
@@ -55,13 +72,14 @@ def holdings_table(data: dict, out: Path, progress: float = 1.0) -> None:
         if a <= 0:
             continue
         y = top - 0.065 - i * step
-        is_new = item["kind"] == "大量保有報告書"
-        fig.text(0.06, y, f"{_short(item['issuer'], 14)} ({item['sec_code']})", fontsize=30, fontweight="bold",
+        color = getattr(t, DIRECTION_COLORS.get(item.get("direction"), "MUTED"))
+        fig.text(0.05, y, f"{_short(item['issuer'], 9)} ({item['sec_code']})", fontsize=27, fontweight="bold",
                  va="center", alpha=a)
-        fig.text(0.47, y, _short(item["filer"], 17), fontsize=26, va="center", alpha=a)
-        fig.text(0.82, y, "新規" if is_new else "変更", fontsize=28, fontweight="bold", va="center", alpha=a,
-                 color=t.WARM if is_new else t.ACCENT)
-    fig.text(0.06, rect[1] - 0.005, f"上場会社分 {h['listed_count']} 件のうち {len(items)} 件を表示  "
+        fig.text(0.36, y, _short(item["filer"], 10), fontsize=25, va="center", alpha=a)
+        fig.text(0.63, y, _ratio_text(item), fontsize=27, fontweight="bold", va="center", alpha=a)
+        fig.text(0.90, y, item.get("direction") or item["kind"][:2], fontsize=27, fontweight="bold", va="center",
+                 alpha=a, color=color)
+    fig.text(0.05, rect[1] - 0.005, f"上場会社についての報告 {h['listed_count']} 件から、保有割合の動きが大きいものを抜粋  "
              f"(新規 {h['listed_new_count']} / 変更 {h['listed_change_count']})", fontsize=22, color=t.MUTED)
     t.save(fig, out)
 

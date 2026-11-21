@@ -7,6 +7,7 @@ import io
 import logging
 import time
 import zipfile
+import zlib
 from pathlib import Path
 
 import requests
@@ -14,8 +15,12 @@ import requests
 log = logging.getLogger(__name__)
 
 DOCUMENTS_URL = "https://api.edinet-fsa.go.jp/api/v2/documents.json"
+DOCUMENT_URL = "https://api.edinet-fsa.go.jp/api/v2/documents/{doc_id}"
+CSV_TYPE = 5  # XBRL を CSV にしたもの (zip、UTF-16 のタブ区切り)
 CODELIST_URL = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 TIMEOUT = 60
+DOCUMENT_TIMEOUT = 20
+csv.field_size_limit(10_000_000)  # 書類の CSV には長い本文 (TextBlock) が入る
 CODE_FIELDS = ("edinet_code", "name", "sec_code", "listed")
 
 
@@ -37,6 +42,31 @@ def fetch_documents(api_key: str, date: str, session: requests.Session | None = 
         message = (body.get("metadata") or {}).get("message") or body.get("message") or "理由不明"
         raise EdinetError(f"EDINET API がエラーを返しました (status {status or '?'}): {message}")
     return body.get("results") or []
+
+
+def parse_document_csv(zip_bytes: bytes) -> list[dict]:
+    """書類の CSV (zip) を [{element, context, value}] にする。"""
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+            names = [n for n in z.namelist() if n.lower().endswith(".csv")]
+            texts = [z.read(n).decode("utf-16") for n in names]
+        return [{"element": r[0], "context": r[2], "value": r[8]} for text in texts
+                for r in list(csv.reader(io.StringIO(text), delimiter="\t"))[1:] if len(r) >= 9]
+    except (zipfile.BadZipFile, UnicodeError, zlib.error, NotImplementedError, csv.Error) as e:
+        raise EdinetError(f"書類の CSV を読めませんでした: {e.__class__.__name__}") from None
+
+
+def fetch_document_csv(api_key: str, doc_id: str, session: requests.Session | None = None) -> list[dict]:
+    """書類1件の本文 (XBRL の CSV)。大量保有報告書の保有割合などを読むのに使う。"""
+    http = session or requests
+    try:
+        res = http.get(DOCUMENT_URL.format(doc_id=doc_id), params={"type": CSV_TYPE, "Subscription-Key": api_key},
+                       timeout=DOCUMENT_TIMEOUT)
+    except requests.RequestException as e:
+        raise EdinetError(f"書類 {doc_id} を取得できませんでした: {e.__class__.__name__}") from None
+    if res.status_code != 200 or "json" in (res.headers.get("Content-Type") or ""):
+        raise EdinetError(f"書類 {doc_id} の CSV がありません (status {res.status_code})")
+    return parse_document_csv(res.content)
 
 
 def parse_codelist(zip_bytes: bytes) -> list[dict]:
