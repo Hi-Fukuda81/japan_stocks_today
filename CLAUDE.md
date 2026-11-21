@@ -19,7 +19,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## チャンネル概要
 
 - チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドルは `@JapanStocksToday`（2026-11-22 に作成。米国株モーニングデータと同じ Google アカウントのブランドアカウント）
-- YouTube API 用の Google Cloud プロジェクトは `japan-stocks-today`（このチャンネル専用。YouTube Data API v3 を有効化済み）。OAuth 同意画面とクライアントの作成、`secrets/client_secret.json` の配置、`--auth` はまだ
+- YouTube API 用の Google Cloud プロジェクトは `japan-stocks-today`（このチャンネル専用。YouTube Data API v3 を有効化済み）。OAuth クライアント（デスクトップ）を作り、`--auth` 済み（2026-11-22）。チャンネル ID は `UC9MAS5rTzoS5Y-jZIsfiVig`。**OAuth はまだ「テスト中」で、リフレッシュトークンが7日で切れる。** 本番に切り替えるにはブランディングにホームページ・プライバシーポリシー・利用規約の URL が要る（finance_news_ch は Google サイトで用意した）。切り替えたら `--auth` をやり直す
+- チャンネルは電話番号の確認がまだなので、カスタムサムネイルを設定できない（投稿は成功し、サムネイルだけ失敗する）。https://www.youtube.com/verify で確認する
+- 2026-11-22 に週間まとめ（11/16〜11/20）を非公開で投稿して、upload まで通ることを確認した
 - チャンネルアートは `uv run python -m src.branding.channel_art` で `assets/branding/`（banner.png、icon.png）に生成する。米国株モーニングデータと同じ構図で、強調色をオレンジにしてある。チャンネルへの設定はまだ
 - 対象：日本株の個人投資家
 - 主役は「公的な一次データ（開示・統計）の読み解き」。株価チャートを並べる動画にはしない
