@@ -42,6 +42,7 @@ class DayPaths:
 
     @classmethod
     def for_date(cls, date: str, output_root: Path = OUTPUT_ROOT) -> "DayPaths":
+        """date は slot_key の値 (夕方便・週間まとめは日付そのまま、朝便は「日付-am」)。"""
         return cls(output_root / date)
 
     @property
@@ -91,3 +92,16 @@ class DayPaths:
     @property
     def description_txt(self) -> Path:
         return self.root / "description.txt"
+
+
+MORNING_SUFFIX = "-am"
+
+
+def slot_key(date: str, edition: str) -> str:
+    """成果物を置くディレクトリ名。朝便と夕方便は同じ日付なので、朝便だけ「2026-11-20-am」にして分ける。"""
+    return f"{date}{MORNING_SUFFIX}" if edition == "morning" else date
+
+
+def slot_date(key: str) -> str:
+    """slot_key から日付 (YYYY-MM-DD) を取り出す。"""
+    return key[:10]

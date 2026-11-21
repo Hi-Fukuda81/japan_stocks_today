@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import argparse
+
+from src.config import slot_key
 import logging
 import sys
 from datetime import date as Date
@@ -25,6 +27,8 @@ def iso_date(value: str) -> str:
 
 
 def run_step(step: str, date: str, edition: str = "evening") -> None:
+    """fetch 以外のステップは、成果物の置き場所 (slot_key) だけを受け取る。"""
+    key = slot_key(date, edition)
     if step == "fetch":
         from src.data.fetch import fetch
 
@@ -32,23 +36,23 @@ def run_step(step: str, date: str, edition: str = "evening") -> None:
     elif step == "script":
         from src.script.runner import run_script_skill
 
-        run_script_skill(date)
+        run_script_skill(key)
     elif step == "tts":
         from src.tts.synthesize import synthesize
 
-        synthesize(date)
+        synthesize(key)
     elif step == "visual":
         from src.visuals.render import render
 
-        render(date)
+        render(key)
     elif step == "video":
         from src.video.compose import compose
 
-        compose(date)
+        compose(key)
     elif step == "upload":
         from src.upload.youtube import upload
 
-        upload(date)
+        upload(key)
     else:
         raise ValueError(f"不明なステップです: {step}")
 

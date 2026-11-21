@@ -100,3 +100,28 @@ def test_build_metadata_stays_private_without_schedule(example_script):
     body = yt.build_metadata(example_script, "d", load_config(), "2026-11-13",
                              now=datetime(2026, 11, 13, 7, 0, tzinfo=timezone.utc))
     assert body["status"]["privacyStatus"] == "private" and "publishAt" not in body["status"]
+
+
+def test_edition_depends_on_start_hour():
+    assert daily.edition_for("2026-11-20", hour=7) == "morning"
+    assert daily.edition_for("2026-11-20", hour=16) == "evening"
+    assert daily.edition_for("2026-11-21", hour=9) == "weekly"       # 土曜は時刻によらず週間まとめ
+    assert daily.edition_for("2026-11-23", hour=7) is None            # 祝日 (月曜) は朝も出さない
+    assert daily.edition_for("2026-11-24", hour=7) == "morning"       # 祝日明けの朝は出す
+
+
+def test_morning_run_uses_its_own_directory(steps, monkeypatch):
+    seen = []
+    monkeypatch.setattr(daily, "already_uploaded", lambda key: seen.append(key))
+    assert daily.run("2026-11-20", hour=7) == 0
+    assert seen == ["2026-11-20-am", "2026-11-20-am"]
+
+
+def test_slot_key_and_voice_for_morning():
+    from src.config import slot_date, slot_key
+    from src.tts.voices import pick_voice
+    assert slot_key("2026-11-20", "morning") == "2026-11-20-am"
+    assert slot_key("2026-11-20", "evening") == slot_key("2026-11-20", "weekly") == "2026-11-20"
+    assert slot_date("2026-11-20-am") == "2026-11-20"
+    vcfg = daily.load_config()["voicevox"]
+    assert pick_voice(vcfg, "2026-11-20-am") == pick_voice(vcfg, "2026-11-20")

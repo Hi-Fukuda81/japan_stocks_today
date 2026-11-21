@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.config import OUTPUT_ROOT, REPO_ROOT, DayPaths, load_config
+from src.config import OUTPUT_ROOT, REPO_ROOT, DayPaths, load_config, slot_key
 from src.data.calendar_jp import closed_reason, week_trading_days
 from src.main import STEPS, run_step
 from src.notify import notify
@@ -30,7 +30,8 @@ JST = ZoneInfo("Asia/Tokyo")
 INTERMEDIATE_DIRS = ("audio", "img", "frames")
 CHANNEL = "きょうの日本株"
 WEEKLY_WEEKDAY = 5  # 土曜 (datetime.weekday)
-EDITION_LABELS = {"evening": "夕方便", "weekly": "週間まとめ"}
+EDITION_LABELS = {"morning": "朝のまとめ", "evening": "夕方のまとめ", "weekly": "週間まとめ"}
+MORNING_UNTIL_HOUR = 12  # これより前の時刻に起動したら朝便、以降は夕方便
 
 
 class AlreadyRunning(RuntimeError):
@@ -71,29 +72,32 @@ def cleanup(output_root: Path, logs_root: Path, keep_intermediate_days: int, kee
             log_file.unlink(missing_ok=True)
 
 
-def edition_for(date: str) -> str | None:
-    """その日に作る動画。作らない日は None。"""
+def edition_for(date: str, hour: int = 16) -> str | None:
+    """その日・その時刻に作る動画。作らない日は None。hour は起動した時刻 (JST の時)。"""
     day = datetime.fromisoformat(date)
     if day.weekday() == WEEKLY_WEEKDAY:
         # 土曜から見て直近の営業日が同じ週 (月曜以降) にあれば、まとめる中身がある
         days = week_trading_days(date)
         return "weekly" if (day - datetime.fromisoformat(days[-1])).days < 6 else None
-    return None if closed_reason(date) else "evening"
+    if closed_reason(date):
+        return None
+    return "morning" if hour < MORNING_UNTIL_HOUR else "evening"
 
 
-def run(date: str) -> int:
-    edition = edition_for(date)
+def run(date: str, hour: int = 16) -> int:
+    edition = edition_for(date, hour)
     if edition is None:
         log.info("%s は配信のない日のためスキップします (%s)", date, closed_reason(date) or "営業日のない週")
         return 0
-    record = already_uploaded(date)
+    key = slot_key(date, edition)
+    record = already_uploaded(key)
     if record:
         log.info("%s は投稿済みです: %s", date, record.get("url"))
         return 0
     for step in STEPS:
         log.info("=== %s (%s, %s) ===", step, date, edition)
         run_step(step, date, edition)
-    record = already_uploaded(date) or {}
+    record = already_uploaded(key) or {}
     notify(CHANNEL, f"{date} の{EDITION_LABELS[edition]}を投稿しました ({record.get('privacy', '?')})。確認して公開してください",
            record.get("url"))
     return 0
@@ -102,10 +106,11 @@ def run(date: str) -> int:
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     cfg = load_config()["daily"]
-    date = datetime.now(JST).date().isoformat()
+    now = datetime.now(JST)
+    date = now.date().isoformat()
     try:
         with single_instance(REPO_ROOT / cfg["lock_file"]):
-            code = run(date)
+            code = run(date, now.hour)
     except AlreadyRunning as e:
         log.warning("%s", e)
         return 0

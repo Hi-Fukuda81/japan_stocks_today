@@ -20,7 +20,7 @@ def pick_voice(vcfg: dict, date: str) -> dict:
     voices に曜日 (mon〜sun) が無い日は default_voice を使う。
     """
     default_speed = vcfg["speed"]
-    weekday = WEEKDAYS[Date.fromisoformat(date).weekday()]
+    weekday = WEEKDAYS[Date.fromisoformat(date[:10]).weekday()]  # date は slot_key (朝便は「日付-am」)
     voice = (vcfg.get("voices") or {}).get(weekday) or vcfg.get("default_voice")
     if voice is None:
         raise VoiceConfigError(f"config.yaml の voicevox に {weekday} の声も default_voice もありません")

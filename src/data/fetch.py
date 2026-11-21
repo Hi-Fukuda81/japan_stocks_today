@@ -11,7 +11,7 @@ from pathlib import Path
 import jsonschema
 import requests
 
-from src.config import REPO_ROOT, DayPaths, env, load_config
+from src.config import REPO_ROOT, DayPaths, env, load_config, slot_key
 from src.data import boj, build, edinet, holdings, mof
 from src.data.calendar_jp import previous_trading_day, week_trading_days
 
@@ -111,7 +111,7 @@ def fetch(date: str, edition: str = "evening") -> Path:
         "notes": _lag_notes(period, usdjpy, jgb),
     }
     validate_data(data)
-    paths = DayPaths.for_date(date)
+    paths = DayPaths.for_date(slot_key(date, edition))
     paths.root.mkdir(parents=True, exist_ok=True)
     paths.data_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     log.info("data.json を書き出しました: %s (%s, 開示 %d 件)", paths.data_json, edition, filings["total"])

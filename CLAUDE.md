@@ -11,8 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 夕方便（大引け後の開示まとめ）と土曜の週間まとめの fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
 - 実データ（2026-11-16〜11-20 の週間まとめ）で fetch → tts → visual → video を動かした（`tmp/real/`）。そのときの台本は手書きで、`claude -p` での台本生成と YouTube への投稿は未実行。夕方便は実データでまだ動かしていない。
-- launchd は未登録（`scripts/install_launchd.sh install` を実行していない）。まず手動で1本を最後まで作ってから登録する。
-- 未実装: 朝便の自動実行（朝便と夕方便は同じ日付なので、いまの `output/DATE/` のままでは成果物が衝突する。置き場所を分けてから `src/daily.py` と launchd に組み込む。月曜の朝も金曜15時以降の分で出す、とユーザーが決めた）、TDnet・JPX のデータ（決算短信など）、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
+- launchd は 2026-11-22 に登録済み（`com.fukuchannel.jpstock.evening`。月〜金 7:00 の朝便と 16:00 の夕方便、土曜 9:00 の週間まとめ）。`src/daily.py` は起動時刻が12時より前なら朝便、以降なら夕方便にする。
+- `claude -p` での台本生成は 2026-11-20 の夕方便の実データで確認済み（48秒、validate OK）。
+- 無人運転でまだ足りないもの: `.env` の `CLAUDE_CODE_OAUTH_TOKEN`（launchd からの `claude -p` 用）と `NTFY_TOPIC`（通知）が未設定。Mac がスリープしていると動かない（`pmset repeat` は finance_news_ch の 6:25 起床に使われていて、16:00 と土曜 9:00 には起こす設定がない）。
+- 未実装: TDnet・JPX のデータ（決算短信など）、公開買付の価格や期間（届出書の本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
 
 次のことは勝手に決めず、ユーザーに確認する: YouTube チャンネルと OAuth クライアントの使い方、公開のしかた（予約公開にするか）、VOICEVOX の声の割り当て、新しいデータソースの追加。
 
@@ -30,7 +32,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 便 | 公開時刻（JST） | 内容 | 状態 |
 |---|---|---|---|
-| 朝便（月〜金） | 8:00ごろ（寄り付き前） | 前営業日の15時以降に EDINET へ提出された書類、直近のドル円・国債金利 | fetch 以降は実装済み（`--edition morning`）。自動実行（`src/daily.py`・launchd）は未対応 |
+| 朝便（月〜金） | 8:00ごろ（寄り付き前） | 前営業日の15時以降に EDINET へ提出された書類、直近のドル円・国債金利 | 実装済み。成果物は `output/DATE-am/`（夕方便と同じ日付なので分ける。`config.slot_key`） |
 | 夕方便（月〜金） | 16:00〜17:00（大引け後） | 当日15時より前に EDINET へ提出された公開買付・大量保有報告書（保有割合の動き）・臨時報告書、直近のドル円・国債金利 | 実装済み |
 | 週間まとめ（土） | 土曜の朝（launchd は 9:00） | その週（月〜金）の公開買付・大量保有報告書・臨時報告書、ドル円・国債金利の前週末比 | 実装済み |
 
@@ -58,7 +60,7 @@ scripts/install_launchd.sh install|uninstall|status            # launchd (月〜
 ```
 
 - `--date` は動画の日付（JST）。夕方便はその日に EDINET へ提出された書類、週間まとめはその日以前で直近の週（月〜金の営業日）を対象にする。
-- `--edition` を使うのは fetch だけ。以降のステップは data.json の `edition` と `period` に従う。
+- 朝便は、fetch 以外のステップを単独で再実行するときも `--edition morning` を付ける（成果物の置き場所が `output/DATE-am/` になるため）。夕方便と週間まとめは `--edition` なしでよい。
 - `script` ステップは実際に `claude -p` を起動する（サブスク枠を消費する）。テストでは必ずモックにする。
 - `upload` ステップは実際に YouTube に投稿する。`output/DATE/upload.json` があれば投稿済みとしてスキップする。
 - 秘密情報（`.env`、`secrets/client_secret.json`、`secrets/youtube_token.json`）は git に入れない。`.env` に必要な値は `.env.example` を参照。`EDINET_API_KEY` は必須。

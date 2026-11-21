@@ -71,7 +71,7 @@ def publish_at(date: str, hhmm: str | None, now: datetime | None = None) -> str 
     from zoneinfo import ZoneInfo
 
     hour, minute = (int(x) for x in hhmm.split(":"))
-    target = datetime.fromisoformat(date).replace(hour=hour, minute=minute, tzinfo=ZoneInfo("Asia/Tokyo"))
+    target = datetime.fromisoformat(date[:10]).replace(hour=hour, minute=minute, tzinfo=ZoneInfo("Asia/Tokyo"))
     now = now or datetime.now(timezone.utc)
     if target <= now:
         return None
