@@ -50,13 +50,13 @@ def test_cleanup_removes_old_intermediates_and_logs(tmp_path):
 @pytest.fixture
 def steps(monkeypatch):
     called = []
-    monkeypatch.setattr(daily, "run_step", lambda step, date: called.append(step))
+    monkeypatch.setattr(daily, "run_step", lambda step, date, edition: called.append((step, edition)))
     monkeypatch.setattr(daily, "notify", lambda *a, **k: called.append("notify"))
     monkeypatch.setattr(daily, "already_uploaded", lambda date: None)
     return called
 
 
-@pytest.mark.parametrize("date", ["2026-11-21", "2026-11-23", "2026-12-31", "2027-01-02"])  # 土曜・祝日・年末年始
+@pytest.mark.parametrize("date", ["2026-11-22", "2026-11-23", "2026-12-31"])  # 日曜・祝日・年末年始
 def test_run_skips_when_market_closed(steps, date):
     assert daily.run(date) == 0
     assert steps == []
@@ -64,7 +64,20 @@ def test_run_skips_when_market_closed(steps, date):
 
 def test_run_all_steps_on_trading_day(steps):
     assert daily.run("2026-11-20") == 0
-    assert steps == [*daily.STEPS, "notify"]
+    assert steps == [*((s, "evening") for s in daily.STEPS), "notify"]
+
+
+def test_run_weekly_on_saturday(steps):
+    assert daily.run("2026-11-21") == 0
+    assert steps == [*((s, "weekly") for s in daily.STEPS), "notify"]
+
+
+@pytest.mark.parametrize("date,edition", [
+    ("2026-11-20", "evening"), ("2026-11-21", "weekly"), ("2026-11-22", None), ("2026-11-23", None),
+    ("2027-01-02", "weekly"),   # 年末年始でも、その週 (12/28〜30) に営業日があればまとめる
+])
+def test_edition_for(date, edition):
+    assert daily.edition_for(date) == edition
 
 
 def test_run_skips_when_already_uploaded(steps, monkeypatch):

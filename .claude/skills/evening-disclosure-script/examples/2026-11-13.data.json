@@ -1,11 +1,25 @@
 {
  "date": "2026-11-13",
  "edition": "evening",
+ "period": {
+  "kind": "evening",
+  "start": "2026-11-13",
+  "end": "2026-11-13",
+  "days": [
+   "2026-11-13"
+  ]
+ },
  "generated_at": "2026-11-13T07:05:00+00:00",
  "example_note": "スキルの見本。提出書類の社名と件数は架空 (ドル円と国債金利は実データ)",
  "filings": {
   "date": "2026-11-13",
   "total": 424,
+  "daily": [
+   {
+    "date": "2026-11-13",
+    "total": 424
+   }
+  ],
   "by_type": [
    {
     "code": "030",
@@ -49,6 +63,7 @@
    }
   ],
   "large_holdings": {
+   "top_issuers": [],
    "count": 35,
    "listed_count": 5,
    "items": [
@@ -57,35 +72,40 @@
      "sec_code": "9901",
      "kind": "大量保有報告書",
      "filer": "サンプル・アセットマネジメント",
-     "submitted_at": "09:12"
+     "submitted_at": "09:12",
+     "date": "2026-11-13"
     },
     {
      "issuer": "テスト精密工業",
      "sec_code": "9903",
      "kind": "大量保有報告書",
      "filer": "見本キャピタル",
-     "submitted_at": "10:40"
+     "submitted_at": "10:40",
+     "date": "2026-11-13"
     },
     {
      "issuer": "見本フーズ",
      "sec_code": "9902",
      "kind": "変更報告書",
      "filer": "テスト信託銀行",
-     "submitted_at": "11:05"
+     "submitted_at": "11:05",
+     "date": "2026-11-13"
     },
     {
      "issuer": "例示ロジスティクス",
      "sec_code": "9904",
      "kind": "変更報告書",
      "filer": "例示インベストメンツ",
-     "submitted_at": "13:30"
+     "submitted_at": "13:30",
+     "date": "2026-11-13"
     },
     {
      "issuer": "架空ケミカル",
      "sec_code": "9905",
      "kind": "変更報告書",
      "filer": "サンプル・アセットマネジメント",
-     "submitted_at": "15:02"
+     "submitted_at": "15:02",
+     "date": "2026-11-13"
     }
    ],
    "listed_new_count": 2,
@@ -101,7 +121,8 @@
      "reasons": [
       "代表取締役の異動"
      ],
-     "submitted_at": "15:31"
+     "submitted_at": "15:31",
+     "date": "2026-11-13"
     },
     {
      "filer": "見本フーズ",
@@ -109,7 +130,8 @@
      "reasons": [
       "主要株主の異動"
      ],
-     "submitted_at": "15:45"
+     "submitted_at": "15:45",
+     "date": "2026-11-13"
     },
     {
      "filer": "架空ケミカル",
@@ -117,7 +139,8 @@
      "reasons": [
       "株主総会の議決権行使結果"
      ],
-     "submitted_at": "16:00"
+     "submitted_at": "16:00",
+     "date": "2026-11-13"
     }
    ]
   },
@@ -127,7 +150,8 @@
     {
      "filer": "例示ホールディングス",
      "target": "テスト精密工業",
-     "sec_code": "9903"
+     "sec_code": "9903",
+     "date": "2026-11-13"
     }
    ]
   },

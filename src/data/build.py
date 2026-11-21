@@ -46,6 +46,10 @@ def sec_code4(code: str | None) -> str | None:
     return code[:4] if len(code) >= 4 else None
 
 
+def submitted_date(doc: dict) -> str:
+    return (doc.get("submitDateTime") or "")[:10]
+
+
 def submitted_time(doc: dict) -> str:
     return (doc.get("submitDateTime") or "")[11:16]
 
@@ -89,10 +93,16 @@ def build_large_holdings(docs: list[dict], codes: dict[str, dict], max_items: in
             continue
         kind = "変更報告書" if "変更報告書" in (d.get("docDescription") or "") else "大量保有報告書"
         items.append({"issuer": issuer["name"], "sec_code": issuer["sec_code"], "kind": kind,
-                      "filer": short_name(d.get("filerName") or ""), "submitted_at": submitted_time(d)})
+                      "filer": short_name(d.get("filerName") or ""), "date": submitted_date(d),
+                      "submitted_at": submitted_time(d)})
     # 新規の大量保有報告書を先に、同じ種類の中では提出の早い順
-    items = sorted(items, key=lambda x: (x["kind"] != "大量保有報告書", x["submitted_at"]))
+    items = sorted(items, key=lambda x: (x["kind"] != "大量保有報告書", x["date"], x["submitted_at"]))
+    per_issuer = Counter((x["issuer"], x["sec_code"]) for x in items)
+    # 期間中に2件以上の報告が出た発行会社 (週間まとめで使う)
+    top_issuers = [{"issuer": name, "sec_code": code, "count": n}
+                   for (name, code), n in sorted(per_issuer.items(), key=lambda kv: (-kv[1], kv[0][1])) if n >= 2]
     return {
+        "top_issuers": top_issuers[:max_items],
         "count": len(rows),
         "listed_new_count": sum(1 for x in items if x["kind"] == "大量保有報告書"),
         "listed_change_count": sum(1 for x in items if x["kind"] == "変更報告書"),
@@ -109,9 +119,9 @@ def build_extraordinary(docs: list[dict], max_items: int) -> dict:
         code, labels = sec_code4(d.get("secCode")), reason_labels(d.get("currentReportReason"))
         if code and labels:
             items.append({"filer": short_name(d.get("filerName") or ""), "sec_code": code, "reasons": labels,
-                          "submitted_at": submitted_time(d)})
+                          "date": submitted_date(d), "submitted_at": submitted_time(d)})
     return {"count": len(rows), "listed_count": sum(1 for d in rows if sec_code4(d.get("secCode"))),
-            "items": sorted(items, key=lambda x: x["submitted_at"])[:max_items]}
+            "items": sorted(items, key=lambda x: (x["date"], x["submitted_at"]))[:max_items]}
 
 
 def build_tender_offers(docs: list[dict], codes: dict[str, dict]) -> dict:
@@ -119,18 +129,22 @@ def build_tender_offers(docs: list[dict], codes: dict[str, dict]) -> dict:
     items = []
     for d in rows:
         target = _company(codes, d.get("subjectEdinetCode"))
-        items.append({"filer": short_name(d.get("filerName") or ""),
+        items.append({"filer": short_name(d.get("filerName") or ""), "date": submitted_date(d),
                       "target": target["name"] if target else None,
                       "sec_code": target["sec_code"] if target else None})
     return {"count": len(rows), "items": items}
 
 
-def build_filings(docs: list[dict], codes: dict[str, dict], date: str, top_types: int, max_items: int) -> dict:
+def build_filings(docs: list[dict], codes: dict[str, dict], days: list[str], top_types: int,
+                  max_items: int) -> dict:
+    """days は対象の提出日 (夕方便は1日、週間まとめはその週の営業日)。"""
     # 一覧には、その日に取下げや修正の操作があった別の日の書類も混ざるので、提出日でも絞る
-    active = [d for d in active_documents(docs) if (d.get("submitDateTime") or "").startswith(date)]
+    active = [d for d in active_documents(docs) if submitted_date(d) in days]
+    per_day = Counter(submitted_date(d) for d in active)
     return {
-        "date": date,
+        "date": days[-1],
         "total": len(active),
+        "daily": [{"date": day, "total": per_day.get(day, 0)} for day in days],
         "by_type": count_by_type(active, top_types),
         "large_holdings": build_large_holdings(active, codes, max_items),
         "extraordinary": build_extraordinary(active, max_items),
@@ -143,11 +157,20 @@ def fx_direction(change: float) -> str:
     return "円安" if change > 0 else "円高" if change < 0 else "横ばい"
 
 
-def build_usdjpy(rows: list[dict], history_days: int) -> dict:
-    """rows は [{date, close}] の古い順。最新の日と、その前の日を比べる。"""
-    if len(rows) < 2:
-        raise ValueError("ドル円の前日比を計算するには2日分以上のデータが必要です")
-    last, prev = rows[-1], rows[-2]
+def _last_and_base(rows: list[dict], base_before: str | None, label: str) -> tuple[dict, dict]:
+    """(最新の行, 比べる相手の行)。base_before があれば、その日より前でいちばん新しい行と比べる (前週末比)。"""
+    if not rows:
+        raise ValueError(f"{label}のデータがありません")
+    last = rows[-1]
+    earlier = [r for r in rows[:-1] if base_before is None or r["date"] < base_before]
+    if not earlier or (base_before and last["date"] < base_before):
+        raise ValueError(f"{label}の変化を計算するためのデータが足りません ({last['date']} 時点)")
+    return last, earlier[-1]
+
+
+def build_usdjpy(rows: list[dict], history_days: int, base_before: str | None = None) -> dict:
+    """rows は [{date, close}] の古い順。最新の日と、その前の日 (週間なら前週末) を比べる。"""
+    last, prev = _last_and_base(rows, base_before, "ドル円")
     change = round(last["close"] - prev["close"], 2)
     history = [{"date": r["date"], "close": round(r["close"], 2)} for r in rows[-history_days:]]
     closes = [h["close"] for h in history]
@@ -160,11 +183,9 @@ def build_usdjpy(rows: list[dict], history_days: int) -> dict:
     }
 
 
-def build_jgb(rows: list[dict], tenors: list[str]) -> dict:
-    """rows は [{date, yields}] の古い順。年限ごとの利回りと前日からの変化 (ポイント)。"""
-    if len(rows) < 2:
-        raise ValueError("国債金利の前日比を計算するには2日分以上のデータが必要です")
-    last, prev = rows[-1], rows[-2]
+def build_jgb(rows: list[dict], tenors: list[str], base_before: str | None = None) -> dict:
+    """rows は [{date, yields}] の古い順。年限ごとの利回りと、前日 (週間なら前週末) からの変化 (ポイント)。"""
+    last, prev = _last_and_base(rows, base_before, "国債金利")
     yields = []
     for tenor in tenors:
         if tenor not in last["yields"] or tenor not in prev["yields"]:

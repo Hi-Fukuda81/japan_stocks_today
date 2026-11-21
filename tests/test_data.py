@@ -50,7 +50,10 @@ def test_active_documents_excludes_withdrawn_and_untyped():
 
 def test_build_filings_drops_documents_submitted_on_another_day():
     docs = [doc("030"), {**doc("030"), "submitDateTime": "2026-11-12 16:00"}]
-    assert build.build_filings(docs, CODES, "2026-11-13", 8, 8)["total"] == 1
+    assert build.build_filings(docs, CODES, ["2026-11-13"], 8, 8)["total"] == 1
+    week = build.build_filings(docs, CODES, ["2026-11-12", "2026-11-13"], 8, 8)
+    assert week["total"] == 2 and week["date"] == "2026-11-13"
+    assert week["daily"] == [{"date": "2026-11-12", "total": 1}, {"date": "2026-11-13", "total": 1}]
 
 
 def test_count_by_type_ranks_and_limits():
@@ -78,7 +81,8 @@ def test_large_holdings_lists_only_listed_issuers_new_first():
     h = build.build_large_holdings(docs, CODES, max_items=1)
     assert (h["count"], h["listed_count"], h["listed_new_count"], h["listed_change_count"]) == (4, 2, 1, 1)
     assert h["items"] == [{"issuer": "アルファ", "sec_code": "1111", "kind": "大量保有報告書",
-                           "filer": "新規ファンド", "submitted_at": "10:00"}]
+                           "filer": "新規ファンド", "date": "2026-11-13", "submitted_at": "10:00"}]
+    assert h["top_issuers"] == [{"issuer": "アルファ", "sec_code": "1111", "count": 2}]
 
 
 def test_extraordinary_needs_listed_filer_and_known_reason():
@@ -88,14 +92,15 @@ def test_extraordinary_needs_listed_filer_and_known_reason():
     e = build.build_extraordinary(docs, max_items=8)
     assert (e["count"], e["listed_count"]) == (3, 2)
     assert e["items"] == [{"filer": "アルファ", "sec_code": "1111", "reasons": ["代表取締役の異動"],
-                           "submitted_at": "15:30"}]
+                           "date": "2026-11-13", "submitted_at": "15:30"}]
 
 
 def test_tender_offers_resolve_target():
     t = build.build_tender_offers([doc("240", "買付者株式会社", subjectEdinetCode="E1"),
                                    doc("240", "買付者2", subjectEdinetCode="E2")], CODES)
-    assert t == {"count": 2, "items": [{"filer": "買付者", "target": "アルファ", "sec_code": "1111"},
-                                       {"filer": "買付者2", "target": None, "sec_code": None}]}
+    assert t["count"] == 2
+    assert t["items"][0] == {"filer": "買付者", "date": "2026-11-13", "target": "アルファ", "sec_code": "1111"}
+    assert t["items"][1]["target"] is None
 
 
 def test_build_usdjpy():
@@ -107,6 +112,24 @@ def test_build_usdjpy():
     assert build.fx_direction(-0.1) == "円高" and build.fx_direction(0) == "横ばい"
     with pytest.raises(ValueError):
         build.build_usdjpy(rows[:1], 30)
+
+
+def test_weekly_change_compares_with_last_value_before_the_week():
+    rows = [{"date": "2026-11-13", "close": 159.85}, {"date": "2026-11-16", "close": 159.53},
+            {"date": "2026-11-18", "close": 159.35}]
+    fx = build.build_usdjpy(rows, 30, base_before="2026-11-16")
+    assert (fx["prev_date"], fx["change"], fx["direction"]) == ("2026-11-13", -0.5, "円高")
+    jgb = build.build_jgb([{"date": "2026-11-13", "yields": {"10年": 2.899}},
+                           {"date": "2026-11-19", "yields": {"10年": 2.87}}], ["10年"], base_before="2026-11-16")
+    assert jgb["prev_date"] == "2026-11-13" and jgb["yields"][0]["change_pt"] == -0.029
+    with pytest.raises(ValueError, match="足りません"):   # その週のデータがまだ1日も公表されていない
+        build.build_usdjpy(rows[:1] + rows[:1], 30, base_before="2026-11-16")
+
+
+def test_week_trading_days():
+    assert calendar_jp.week_trading_days("2026-11-21") == [f"2026-11-{d}" for d in (16, 17, 18, 19, 20)]
+    assert calendar_jp.week_trading_days("2026-11-28") == [f"2026-11-{d}" for d in (24, 25, 26, 27)]  # 23日は祝日
+    assert calendar_jp.week_trading_days("2026-11-18") == ["2026-11-16", "2026-11-17", "2026-11-18"]
 
 
 def test_build_jgb():
@@ -256,6 +279,29 @@ def test_fetch_writes_valid_data_json(fake_sources):
     assert data["filings"]["large_holdings"]["items"][0]["issuer"] == "アルファ"
     assert data["reference"]["large_holding_threshold_pct"] == 5
     assert len(data["notes"]) == 2 and "2026-11-12" in data["notes"][0]
+
+
+def test_fetch_weekly_covers_the_week(fake_sources, monkeypatch):
+    asked = []
+
+    def documents(key, date):
+        asked.append(date)
+        return [{**d, "submitDateTime": f"{date} 15:30"} for d in fake_sources]
+
+    monkeypatch.setattr(fetch_mod.edinet, "fetch_documents", documents)
+    monkeypatch.setattr(fetch_mod.boj, "fetch_usdjpy", lambda *a: [
+        {"date": "2026-11-13", "close": 159.85}, {"date": "2026-11-18", "close": 159.35}])
+    monkeypatch.setattr(fetch_mod.mof, "fetch_yields", lambda *a, **k: [
+        {"date": "2026-11-13", "yields": {t: 2.0 for t in ("2年", "5年", "10年", "20年", "30年")}},
+        {"date": "2026-11-19", "yields": {t: 2.1 for t in ("2年", "5年", "10年", "20年", "30年")}}])
+    data = json.loads(fetch_mod.fetch("2026-11-21", "weekly").read_text(encoding="utf-8"))
+    assert asked == [f"2026-11-{d}" for d in (16, 17, 18, 19, 20)]
+    assert data["edition"] == "weekly" and data["period"]["start"] == "2026-11-16" and data["period"]["end"] == "2026-11-20"
+    assert data["filings"]["total"] == 15 and len(data["filings"]["daily"]) == 5
+    assert data["filings"]["large_holdings"]["top_issuers"] == [{"issuer": "アルファ", "sec_code": "1111", "count": 5}]
+    assert data["usdjpy"]["prev_date"] == "2026-11-13" and len(data["notes"]) == 2
+    with pytest.raises(ValueError):
+        fetch_mod.fetch("2026-11-21", "morning")
 
 
 def test_fetch_requires_api_key_and_documents(fake_sources, monkeypatch):

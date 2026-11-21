@@ -1,7 +1,8 @@
-"""夕方便の無人実行 (launchd から呼ばれる)。
+"""夕方便・週間まとめの無人実行 (launchd から呼ばれる)。
 
 - 多重起動を防ぐ (output/.lock)
-- 東証の休場日 (土日・祝日・年末年始) は何もしない
+- 月〜金は夕方便、土曜は週間まとめ (その週の月〜金) を作る
+- 東証の休場日 (祝日・年末年始) と日曜は何もしない。営業日が1日もなかった週は週間まとめも作らない
 - 当日分が投稿済みなら何もしない
 - 成功・失敗を通知し、古い中間ファイルとログを掃除する
 """
@@ -20,7 +21,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from src.config import OUTPUT_ROOT, REPO_ROOT, DayPaths, load_config
-from src.data.calendar_jp import closed_reason
+from src.data.calendar_jp import closed_reason, week_trading_days
 from src.main import STEPS, run_step
 from src.notify import notify
 
@@ -28,6 +29,8 @@ log = logging.getLogger("daily")
 JST = ZoneInfo("Asia/Tokyo")
 INTERMEDIATE_DIRS = ("audio", "img", "frames")
 CHANNEL = "きょうの日本株"
+WEEKLY_WEEKDAY = 5  # 土曜 (datetime.weekday)
+EDITION_LABELS = {"evening": "夕方便", "weekly": "週間まとめ"}
 
 
 class AlreadyRunning(RuntimeError):
@@ -68,20 +71,30 @@ def cleanup(output_root: Path, logs_root: Path, keep_intermediate_days: int, kee
             log_file.unlink(missing_ok=True)
 
 
+def edition_for(date: str) -> str | None:
+    """その日に作る動画。作らない日は None。"""
+    day = datetime.fromisoformat(date)
+    if day.weekday() == WEEKLY_WEEKDAY:
+        # 土曜から見て直近の営業日が同じ週 (月曜以降) にあれば、まとめる中身がある
+        days = week_trading_days(date)
+        return "weekly" if (day - datetime.fromisoformat(days[-1])).days < 6 else None
+    return None if closed_reason(date) else "evening"
+
+
 def run(date: str) -> int:
-    reason = closed_reason(date)
-    if reason:
-        log.info("%s は東証の休場日のためスキップします (%s)", date, reason)
+    edition = edition_for(date)
+    if edition is None:
+        log.info("%s は配信のない日のためスキップします (%s)", date, closed_reason(date) or "営業日のない週")
         return 0
     record = already_uploaded(date)
     if record:
         log.info("%s は投稿済みです: %s", date, record.get("url"))
         return 0
     for step in STEPS:
-        log.info("=== %s (%s) ===", step, date)
-        run_step(step, date)
+        log.info("=== %s (%s, %s) ===", step, date, edition)
+        run_step(step, date, edition)
     record = already_uploaded(date) or {}
-    notify(CHANNEL, f"{date} の夕方便を投稿しました ({record.get('privacy', '?')})。確認して公開してください",
+    notify(CHANNEL, f"{date} の{EDITION_LABELS[edition]}を投稿しました ({record.get('privacy', '?')})。確認して公開してください",
            record.get("url"))
     return 0
 
@@ -97,7 +110,7 @@ def main() -> int:
         log.warning("%s", e)
         return 0
     except Exception as e:
-        log.error("夕方便の実行に失敗しました: %s", e, exc_info=True)
+        log.error("実行に失敗しました: %s", e, exc_info=True)
         notify(f"{CHANNEL}: 失敗", f"{date} の実行に失敗しました: {str(e)[:120]}")
         return 1
     finally:

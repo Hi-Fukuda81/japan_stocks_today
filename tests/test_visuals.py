@@ -47,6 +47,16 @@ def test_thumbnail_headline(example_data):
     assert thumbnail.headline(no_tob) == ("大量保有 35件", "提出書類 424件")
 
 
+def test_weekly_labels(example_data):
+    from src.visuals import theme
+    weekly = {**example_data, "edition": "weekly",
+              "period": {"kind": "weekly", "start": "2026-11-09", "end": "2026-11-13", "days": []}}
+    assert theme.filings_label(weekly) == "11月9日〜11月13日 提出分" and theme.change_word(weekly) == "前週末比"
+    assert theme.filings_label(example_data) == "11月13日 提出分" and theme.change_word(example_data) == "前日比"
+    assert thumbnail.tag_for(weekly) == "週間まとめ 11/9〜11/13"
+    assert thumbnail.tag_for(example_data) == "きょうの日本株【夕】11/13"
+
+
 def test_ending_credit_prefers_manifest(tmp_path):
     from src.visuals.render import speaker_name
 

@@ -7,17 +7,18 @@
             "count": {"type": "integer", "minimum": 0}},
   "properties": {
     "date": {"$ref": "#/$defs/day"},
-    "edition": {"enum": ["evening"]},
+    "edition": {"enum": ["evening", "weekly"]},
+    "period": {"type": "object", "required": ["kind", "start", "end", "days"]},
     "filings": {
       "type": "object",
-      "required": ["date", "total", "by_type", "large_holdings", "extraordinary", "tender_offers", "buybacks"],
+      "required": ["date", "total", "daily", "by_type", "large_holdings", "extraordinary", "tender_offers", "buybacks"],
       "properties": {
         "date": {"$ref": "#/$defs/day"},
         "total": {"type": "integer", "minimum": 1},
         "by_type": {"type": "array", "minItems": 1,
                     "items": {"type": "object", "required": ["code", "name", "count"]}},
         "large_holdings": {
-          "type": "object", "required": ["count", "listed_count", "listed_new_count", "listed_change_count", "items"],
+          "type": "object", "required": ["count", "listed_count", "listed_new_count", "listed_change_count", "top_issuers", "items"],
           "properties": {"items": {"type": "array", "items": {
             "type": "object", "required": ["issuer", "sec_code", "kind", "filer"]}}}
         },

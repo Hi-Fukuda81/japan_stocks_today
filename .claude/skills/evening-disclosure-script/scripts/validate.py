@@ -26,6 +26,7 @@ SCENES = [
     ("07_ending", "ending"),
 ]
 TITLE_PREFIX = "きょうの日本株【夕】"
+WEEKLY_TITLE_PREFIX = "きょうの日本株【週間まとめ】"
 MAX_LINE_CHARS = 45
 MIN_TOTAL_CHARS = 600
 TARGET_TOTAL_CHARS = (1000, 2200)
@@ -178,9 +179,17 @@ def check_dates(line: str, month_days: set[tuple[int, int]]) -> list[str]:
     ]
 
 
+def _month_day(iso) -> str:
+    m = re.fullmatch(r"\d{4}-(\d{2})-(\d{2})", str(iso or ""))
+    return f"{int(m.group(1))}/{int(m.group(2))}" if m else ""
+
+
 def title_prefix(data: dict) -> str:
-    m = re.fullmatch(r"\d{4}-(\d{2})-(\d{2})", str(data.get("date") or ""))
-    return f"{TITLE_PREFIX}{int(m.group(1))}/{int(m.group(2))}" if m else TITLE_PREFIX
+    """夕方便は「きょうの日本株【夕】11/20」、週間まとめは「きょうの日本株【週間まとめ】11/16〜11/20」。"""
+    if data.get("edition") == "weekly":
+        period = data.get("period") or {}
+        return f"{WEEKLY_TITLE_PREFIX}{_month_day(period.get('start'))}〜{_month_day(period.get('end'))}"
+    return f"{TITLE_PREFIX}{_month_day(data.get('date'))}"
 
 
 def check_structure(script: dict, data: dict) -> list[str]:

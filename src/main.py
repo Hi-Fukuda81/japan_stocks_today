@@ -1,6 +1,7 @@
 """パイプライン全体の実行。ステップ単位でも実行できる。
 
 例: uv run python -m src.main --step fetch --date 2026-11-20
+    uv run python -m src.main --date 2026-11-21 --edition weekly   # 土曜の週間まとめ
 """
 
 from __future__ import annotations
@@ -23,11 +24,11 @@ def iso_date(value: str) -> str:
         raise argparse.ArgumentTypeError(f"日付は YYYY-MM-DD 形式で指定してください: {value}") from e
 
 
-def run_step(step: str, date: str) -> None:
+def run_step(step: str, date: str, edition: str = "evening") -> None:
     if step == "fetch":
         from src.data.fetch import fetch
 
-        fetch(date)
+        fetch(date, edition)
     elif step == "script":
         from src.script.runner import run_script_skill
 
@@ -53,10 +54,12 @@ def run_step(step: str, date: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="きょうの日本株 (夕方便) の動画生成")
+    parser = argparse.ArgumentParser(description="きょうの日本株 (夕方便・週間まとめ) の動画生成")
     parser.add_argument("--step", choices=["all", *STEPS], default="all")
     parser.add_argument("--date", type=iso_date, default=datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat(),
                         help="動画の日付 = 開示の対象日 (JST, YYYY-MM-DD)。既定は今日")
+    parser.add_argument("--edition", choices=["evening", "weekly"], default="evening",
+                        help="weekly は土曜の週間まとめ (直近の月〜金)。fetch だけが使い、以降のステップは data.json に従う")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -64,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     for step in steps:
         log.info("=== %s (%s) ===", step, args.date)
         try:
-            run_step(step, args.date)
+            run_step(step, args.date, args.edition)
         except Exception as e:
             log.error("ステップ %s が失敗しました: %s", step, e, exc_info=True)
             return 1

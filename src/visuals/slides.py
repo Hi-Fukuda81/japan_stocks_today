@@ -30,8 +30,11 @@ def title(data: dict, out: Path) -> None:
     fig = _blank_figure()
     d = Date.fromisoformat(data["date"])
     fig.text(0.5, 0.78, f"{d.year}年{d.month}月{d.day}日", ha="center", fontsize=44, color=t.MUTED)
-    fig.text(0.5, 0.64, "きょうの日本株 夕方便", ha="center", fontsize=96, fontweight="bold")
-    fig.text(0.5, 0.555, "大引け後の開示まとめ", ha="center", fontsize=36, color=t.ACCENT)
+    weekly = t.is_weekly(data)
+    fig.text(0.5, 0.64, "きょうの日本株 週間まとめ" if weekly else "きょうの日本株 夕方便", ha="center", fontsize=96,
+             fontweight="bold")
+    sub = f"{t.ja_date(data['period']['start'])}〜{t.ja_date(data['period']['end'])}の開示" if weekly else "大引け後の開示まとめ"
+    fig.text(0.5, 0.555, sub, ha="center", fontsize=36, color=t.ACCENT)
     numbers = headline_numbers(data)
     for i, (label, count) in enumerate(numbers):
         x = (i + 0.5) / len(numbers) * 0.84 + 0.08
@@ -52,7 +55,7 @@ def event_rows(data: dict) -> list[tuple[str, str, str]]:
 
 def events_list(data: dict, out: Path) -> None:
     f = data["filings"]
-    fig, rect = t.new_figure("公開買付・臨時報告書", f"{t.ja_date(f['date'])} 提出分")
+    fig, rect = t.new_figure("公開買付・臨時報告書", t.filings_label(data))
     rows = event_rows(data)
     y = rect[1] + rect[3] - 0.03
     if not rows:

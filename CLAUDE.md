@@ -9,11 +9,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 現状
 
-- 夕方便（大引け後の開示まとめ）の fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
-- 見本データ（`.claude/skills/evening-disclosure-script/examples/`、社名と件数は架空）で tts → video までは実際に動かした。
+- 夕方便（大引け後の開示まとめ）と土曜の週間まとめの fetch → script → tts → visual → video → upload を実装済み。テストは通っている。
+- 架空の提出書類（社名と件数は架空、ドル円と国債金利は実データ）で、夕方便と週間まとめの tts → video までは実際に動かした。
 - **実データでの通し実行はまだ。** `EDINET_API_KEY` が未設定のため fetch を実際の EDINET に対して動かしていない。`claude -p` での台本生成、YouTube への投稿も未実行。
 - launchd は未登録（`scripts/install_launchd.sh install` を実行していない）。まず手動で1本を最後まで作ってから登録する。
-- 未実装: 朝便、TDnet・JPX のデータ、大量保有報告書の保有割合（書類本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
+- 未実装: 朝便（月〜金の朝）、TDnet・JPX のデータ、大量保有報告書の保有割合（書類本文の取得が必要）、チャンネルアート、BGM（`assets/bgm.mp3` を置けば自動で使う）。
 
 次のことは勝手に決めず、ユーザーに確認する: YouTube チャンネルと OAuth クライアントの使い方、公開のしかた（予約公開にするか）、VOICEVOX の声の割り当て、新しいデータソースの追加。
 
@@ -22,13 +22,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - チャンネル名：きょうの日本株（英語名：Japan Stocks Today）。ハンドル候補は `@JapanStocksToday`（使用済みなら `@kyonihonkabu`）
 - 対象：日本株の個人投資家
 - 主役は「公的な一次データ（開示・統計）の読み解き」。株価チャートを並べる動画にはしない
-- 動画タイトルは `きょうの日本株【夕】11/21 ...`（朝便は `【朝】`）で始める。validate.py が検査する
-- 東証の休場日（土日・祝日・12/31〜1/3）は配信しない
+- 動画タイトルは `きょうの日本株【夕】11/20 ...`（朝便は `【朝】`）、週間まとめは `きょうの日本株【週間まとめ】11/16〜11/20 ...` で始める。validate.py が検査する
+- 東証の休場日（祝日・12/31〜1/3）と日曜は配信しない。土曜は週間まとめだけ
 
 | 便 | 公開時刻（JST） | 内容 | 状態 |
 |---|---|---|---|
-| 夕方便 | 16:00〜17:00（大引け後） | 当日の EDINET 提出書類、直近のドル円・国債金利 | 実装済み |
-| 朝便 | 8:00ごろ（寄り付き前） | 前日15時以降の開示・決算のまとめ、今日の決算発表予定、朝の為替 | 未実装 |
+| 朝便（月〜金） | 8:00ごろ（寄り付き前） | 前日15時以降の開示・決算のまとめ、今日の決算発表予定、朝の為替 | 未実装 |
+| 夕方便（月〜金） | 16:00〜17:00（大引け後） | 当日の EDINET 提出書類、直近のドル円・国債金利 | 実装済み |
+| 週間まとめ（土） | 土曜の朝（launchd は 9:00） | その週（月〜金）の EDINET 提出書類の合計、ドル円・国債金利の前週末比 | 実装済み |
 
 ## コマンド
 
@@ -36,16 +37,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync                                                        # 依存関係 (Python 3.12 以上)
 uv run python -m src.main --date 2026-11-20                    # 全ステップ (fetch → script → tts → visual → video → upload)
 uv run python -m src.main --step visual --date 2026-11-20      # 1ステップだけ再実行
+uv run python -m src.main --date 2026-11-21 --edition weekly   # 土曜の週間まとめ (直近の月〜金)
 uv run pytest                                                  # 全テスト
 uv run pytest tests/test_validate.py::test_ng_word_detected    # 1テストだけ
 uv run pytest --cov=src --cov=.claude/skills/evening-disclosure-script/scripts
 uv run python .claude/skills/evening-disclosure-script/scripts/validate.py output/2026-11-20   # 台本の検証 (0=OK, 1=NG)
 uv run python -m src.upload.youtube --auth                     # YouTube の OAuth 認証 (初回・期限切れ時)
-uv run python -m src.daily                                     # 無人実行と同じ処理 (今日の日付、ロック・休場スキップ・投稿済み判定・通知つき)
-scripts/install_launchd.sh install|uninstall|status            # launchd (月〜金 16:00 の夕方便) の登録
+uv run python -m src.daily                                     # 無人実行と同じ処理 (今日の日付。平日は夕方便、土曜は週間まとめ。ロック・休場スキップ・投稿済み判定・通知つき)
+scripts/install_launchd.sh install|uninstall|status            # launchd (月〜金 16:00 の夕方便、土曜 9:00 の週間まとめ) の登録
 ```
 
-- `--date` は動画の日付（JST）で、その日に EDINET へ提出された書類を対象にする。
+- `--date` は動画の日付（JST）。夕方便はその日に EDINET へ提出された書類、週間まとめはその日以前で直近の週（月〜金の営業日）を対象にする。
+- `--edition` を使うのは fetch だけ。以降のステップは data.json の `edition` と `period` に従う。
 - `script` ステップは実際に `claude -p` を起動する（サブスク枠を消費する）。テストでは必ずモックにする。
 - `upload` ステップは実際に YouTube に投稿する。`output/DATE/upload.json` があれば投稿済みとしてスキップする。
 - 秘密情報（`.env`、`secrets/client_secret.json`、`secrets/youtube_token.json`）は git に入れない。`.env` に必要な値は `.env.example` を参照。`EDINET_API_KEY` は必須。
@@ -92,6 +95,15 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 - 臨時報告書の提出事由は、開示府令19条2項の号を `build.REPORT_REASONS` で日本語にしている。確実な号だけを載せ、表にない号の書類は一覧に出さない。
 - `data.reference` は制度上の基準値（大量保有報告書の5%など）。台本で制度を説明するときの数値も照合対象にするために data.json に入れている。
 - 営業日判定は `src/data/calendar_jp.py`（`jpholiday` + 年末年始）。
+
+### 週間まとめ
+
+夕方便と同じ data.json の形・シーン構成・validate・図表を使い、対象期間だけが違う（`edition: "weekly"`、`period.days` がその週の営業日）。
+
+- 提出書類は営業日ごとに EDINET を呼んで合算する。`filings.daily` に日ごとの件数、`large_holdings.top_issuers` に期間中2件以上の報告が出た上場会社が入る（夕方便でも同じキーがあるが、中身は1日分）。
+- ドル円・国債金利の `change` は、週の初日より前でいちばん新しい値（前週末）との差。図の表記は `theme.change_word` で「前週末比」に切り替わる。
+- 日銀・財務省の公表は遅いので、土曜の朝の時点では週の後半の値がまだない。`notes` と図にデータの日付が出る。その週の値が1日分もなければ fetch は失敗する。
+- 台本の言い方の違いはスキルの SKILL.md「週間まとめ」にある。
 
 ### データに関するルール
 

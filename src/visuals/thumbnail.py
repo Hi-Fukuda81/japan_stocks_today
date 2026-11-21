@@ -33,12 +33,22 @@ def headline(data: dict) -> tuple[str, str]:
     return f"大量保有 {f['large_holdings']['count']}件", f"提出書類 {f['total']:,}件"
 
 
+def _md(iso: str) -> str:
+    d = Date.fromisoformat(iso)
+    return f"{d.month}/{d.day}"
+
+
+def tag_for(data: dict) -> str:
+    if data.get("edition") == "weekly":
+        return f"週間まとめ {_md(data['period']['start'])}〜{_md(data['period']['end'])}"
+    return f"きょうの日本株【夕】{_md(data['date'])}"
+
+
 def render(data: dict, out: Path, font_path: str | None = None) -> Path:
     font: str = font_path or load_config()["video"]["font_heavy"]
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
-    d = Date.fromisoformat(data["date"])
-    tag = f"きょうの日本株【夕】{d.month}/{d.day}"
+    tag = tag_for(data)
     tag_font = ImageFont.truetype(font, 60)
     draw.rectangle([0, 14, draw.textlength(tag, font=tag_font) + 50, 104], fill=TAG)
     draw.text((24, 59), tag, font=tag_font, fill=WHITE, anchor="lm")

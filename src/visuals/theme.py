@@ -59,6 +59,22 @@ def new_figure(title: str, label: str):
     return fig, [0.06, bottom, 0.88, 0.84 - bottom]
 
 
+def is_weekly(data: dict) -> bool:
+    return data.get("edition") == "weekly"
+
+
+def change_word(data: dict) -> str:
+    return "前週末比" if is_weekly(data) else "前日比"
+
+
+def filings_label(data: dict) -> str:
+    """図の右上に出す提出日。週間なら「11月16日〜11月20日 提出分」。"""
+    if is_weekly(data):
+        p = data["period"]
+        return f"{ja_date(p['start'])}〜{ja_date(p['end'])} 提出分"
+    return f"{ja_date(data['filings']['date'])} 提出分"
+
+
 def ease_out(p: float) -> float:
     """アニメーションの進み具合 (0〜1) を、終わりにかけて減速する曲線にする。"""
     p = min(max(p, 0.0), 1.0)

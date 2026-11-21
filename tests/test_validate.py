@@ -127,6 +127,15 @@ def test_title_must_start_with_channel_prefix_and_date(validate_mod, example_scr
     assert any("きょうの日本株【夕】11/13" in i for i in issues)
 
 
+def test_weekly_title_prefix(validate_mod, example_script, example_data):
+    data = {**example_data, "edition": "weekly",
+            "period": {"kind": "weekly", "start": "2026-11-09", "end": "2026-11-13", "days": []}}
+    ok = {**example_script, "title": "きょうの日本株【週間まとめ】11/9〜11/13 大量保有報告書 35件"}
+    assert run(validate_mod, ok, data)[0] == []
+    issues, _ = run(validate_mod, example_script, data)   # 夕方便の書き出しのまま
+    assert any("週間まとめ" in i for i in issues)
+
+
 def test_too_short_script(validate_mod, example_script, example_data):
     scenes = [{**s, "lines": s["lines"][:1]} for s in example_script["scenes"]]
     issues, _ = run(validate_mod, {**example_script, "scenes": scenes}, example_data)

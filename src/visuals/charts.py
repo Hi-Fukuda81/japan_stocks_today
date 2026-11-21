@@ -21,7 +21,7 @@ def _clean_axes(ax) -> None:
 
 def filings_bar(data: dict, out: Path, progress: float = 1.0) -> None:
     f = data["filings"]
-    fig, rect = t.new_figure("EDINET 提出書類の内訳", f"{t.ja_date(f['date'])} 提出分 / 全 {f['total']:,} 件")
+    fig, rect = t.new_figure("EDINET 提出書類の内訳", f"{t.filings_label(data)} / 全 {f['total']:,} 件")
     rows = list(reversed(f["by_type"]))  # 件数の多いものを上に
     ax = fig.add_axes([rect[0] + 0.24, rect[1] + 0.02, rect[2] - 0.32, rect[3] - 0.02])
     top = max(r["count"] for r in rows)
@@ -42,7 +42,7 @@ def filings_bar(data: dict, out: Path, progress: float = 1.0) -> None:
 
 def holdings_table(data: dict, out: Path, progress: float = 1.0) -> None:
     h = data["filings"]["large_holdings"]
-    fig, rect = t.new_figure("大量保有報告書・変更報告書", f"{t.ja_date(data['filings']['date'])} 提出分 / 全 {h['count']:,} 件")
+    fig, rect = t.new_figure("大量保有報告書・変更報告書", f"{t.filings_label(data)} / 全 {h['count']:,} 件")
     top = rect[1] + rect[3] - 0.01
     for x, label in ((0.06, "発行会社 (証券コード)"), (0.47, "提出者"), (0.82, "種類")):
         fig.text(x, top, label, fontsize=22, color=t.MUTED, va="center")
@@ -91,7 +91,7 @@ def usdjpy_line(data: dict, out: Path, progress: float = 1.0) -> None:
     x0 = rect[0] + rect[2] - 0.2
     fig.text(x0, rect[1] + rect[3] * 0.84, "17時時点", fontsize=26, color=t.MUTED)
     fig.text(x0, rect[1] + rect[3] * 0.67, f"{fx['close']:.2f}円", fontsize=60, fontweight="bold")
-    fig.text(x0, rect[1] + rect[3] * 0.53, f"前日比 {fx['change']:+.2f}円", fontsize=30, color=t.ACCENT)
+    fig.text(x0, rect[1] + rect[3] * 0.53, f"{t.change_word(data)} {fx['change']:+.2f}円", fontsize=30, color=t.ACCENT)
     fig.text(x0, rect[1] + rect[3] * 0.41, fx["direction"], fontsize=40, fontweight="bold", color=t.ACCENT)
     fig.text(x0, rect[1] + rect[3] * 0.22, f"期間高値 {fx['period_high']:.2f}", fontsize=22, color=t.MUTED)
     fig.text(x0, rect[1] + rect[3] * 0.12, f"期間安値 {fx['period_low']:.2f}", fontsize=22, color=t.MUTED)
@@ -117,6 +117,6 @@ def jgb_yields(data: dict, out: Path, progress: float = 1.0) -> None:
     for x, r in zip(xs, rows):
         y = r["yield_pct"] * progress
         ax.text(x, y + top * 0.12, f"{r['yield_pct'] * progress:.3f}%", ha="center", fontsize=34, fontweight="bold")
-        ax.text(x, y + top * 0.03, f"前日比 {r['change_pt']:+.3f}", ha="center", fontsize=22, color=t.MUTED,
+        ax.text(x, y + top * 0.03, f"{t.change_word(data)} {r['change_pt']:+.3f}", ha="center", fontsize=22, color=t.MUTED,
                 alpha=progress)
     t.save(fig, out)
