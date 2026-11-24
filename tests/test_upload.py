@@ -53,7 +53,7 @@ def ready_day(monkeypatch, day_dir):
 
 def test_build_metadata_without_date_uses_fallback_privacy(example_script):
     body = yt.build_metadata(example_script, "説明", load_config())
-    assert body["status"] == {"privacyStatus": "private", "selfDeclaredMadeForKids": False,
+    assert body["status"] == {"privacyStatus": "public", "selfDeclaredMadeForKids": False,
                               "containsSyntheticMedia": False}
     assert body["snippet"]["title"] == example_script["title"]
     assert "日本株" in body["snippet"]["tags"]

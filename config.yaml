@@ -88,7 +88,7 @@ tts_replacements:
 upload:
   client_secret: secrets/client_secret.json   # Google Cloud の OAuth クライアント (デスクトップアプリ)
   token: secrets/youtube_token.json            # 初回認証で作られる。git には入れない
-  privacy: private                             # 人が台本・動画を確認してから Studio で公開する
+  privacy: public                              # 投稿と同時に公開する (きょうの米国株と同じく無人で公開)
   category_id: "25"                            # ニュースと政治
   publish_at: null                             # 予約公開しない ("16:45" のように書くと JST のその時刻に予約公開する)
 

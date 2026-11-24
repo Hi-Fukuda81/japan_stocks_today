@@ -164,7 +164,7 @@ upload (src/upload/youtube.py)    → upload.json          (YouTube に非公開
 YouTube は2025年7月から「非本物コンテンツ（inauthentic content）」として、テンプレート的な量産動画の収益化を厳しくしている。
 
 - 開示を読み上げるだけにしない。毎回「なぜ重要か」「何を意味するか」の解説を入れる（スキルの `style_guide.md`「解説」）。
-- **人が台本と動画を確認してから公開する。** そのため `config.yaml` の `upload.privacy` は `private`、`publish_at` は `null`（予約公開しない）にしてある。投稿後の通知を見て、YouTube Studio で確認・修正してから公開する。finance_news_ch は予約公開だが、こちらは変えない。
+- **投稿と同時に公開する**（2026-11-24 にユーザーが決めた。きょうの米国株と同じく無人で公開する）。`config.yaml` の `upload.privacy` は `public`、`publish_at` は `null`。人が事前に確認しないぶん、validate.py（数値の照合・NG ワード）が最後の歯止めになる。問題があれば通知の URL から YouTube Studio で直すか非公開に戻す。
 - 台本の型を複数用意し、動画ごとの構成や言い回しが似すぎないようにする（現状はシーン構成が1種類。型を増やすのは今後の課題）。
 - 再審査請求に備えて、制作過程（`output/DATE/` の data.json と script.json、台本の修正履歴）を残しておく。
 

@@ -98,7 +98,9 @@ def run(date: str, hour: int = 16) -> int:
         log.info("=== %s (%s, %s) ===", step, date, edition)
         run_step(step, date, edition)
     record = already_uploaded(key) or {}
-    notify(CHANNEL, f"{date} の{EDITION_LABELS[edition]}を投稿しました ({record.get('privacy', '?')})。確認して公開してください",
+    privacy = record.get("privacy", "?")
+    hint = "。確認して公開してください" if privacy == "private" and not record.get("publish_at") else ""
+    notify(CHANNEL, f"{date} の{EDITION_LABELS[edition]}を投稿しました ({privacy}){hint}",
            record.get("url"))
     return 0
 

@@ -97,7 +97,9 @@ def test_publish_at(now, expected):
 
 def test_build_metadata_stays_private_without_schedule(example_script):
     from src.config import load_config
-    body = yt.build_metadata(example_script, "d", load_config(), "2026-11-13",
+    cfg = load_config()
+    cfg = {**cfg, "upload": {**cfg["upload"], "privacy": "private", "publish_at": None}}
+    body = yt.build_metadata(example_script, "d", cfg, "2026-11-13",
                              now=datetime(2026, 11, 13, 7, 0, tzinfo=timezone.utc))
     assert body["status"]["privacyStatus"] == "private" and "publishAt" not in body["status"]
 
